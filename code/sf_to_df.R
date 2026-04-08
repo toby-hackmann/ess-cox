@@ -15,8 +15,9 @@ sf_to_df <- function( sf, time ){
   df <- merge( df, data.frame(time = time ), by = "time", all = TRUE, sort = TRUE )
   
   # Fill the dataframe downwards
-  df <- fill(df, 2:8, .direction = "downup")
+  df <- fill(df, 2:11, .direction = "downup")
   
   return(df[ df$time %in% time, ])
   
 }
+

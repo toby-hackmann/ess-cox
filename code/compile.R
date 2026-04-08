@@ -17,7 +17,8 @@ pkgs <- c(
   "patchwork",
   "grid",
   "knitr",
-  "surveillance"
+  "surveillance",
+  "here"
 )
 
 options(repos = list(CRAN="http://cran.rstudio.com/"))
@@ -39,11 +40,11 @@ colon_df <- colon_df[colon_df$etype == 2, ]
 
 col <- c("lp" = "#9f84af", "dp" = "#37293F", "r" = "#C2666B", "y" = "#c6aa2c",  "b" = "#2E7691" )
 
-source("code/modified.R")
-source("code/calculate_ess.R")
-source("code/survfit_n.R")
-source("code/plot_effective_n.R")
-source("code/variance_cumhaz.R")
-source("code/bootstrap.R")
-source("code/variance_mstate.R")
-source("code/sf_to_df.R")
+source(here::here("code", "modified.R"))
+source(here::here("code", "calculate_ess.R"))
+source(here::here("code", "survfit_n.R"))
+source(here::here("code", "plot_effective_n.R"))
+source(here::here("code", "variance_cumhaz.R"))
+source(here::here("code", "bootstrap.R"))
+source(here::here("code", "variance_mstate.R"))
+source(here::here("code", "sf_to_df.R"))

@@ -39,62 +39,50 @@ affiliations:
 - id: julius
   name: Julius Center for Health Sciences and Primary Care, University Medical Center
     Utrecht, Utrecht, the Netherlands
-abstract: "Uncertainty is an important element of predictions from clinical prediction
-  models. Effective sample size translates uncertainty into a number of 'patients
-  like you' that a prediction is effectively based on. In this article, we aim to
-  explore the concept of effective sample size for the Cox model for prediction 
-  of survival probabilities. It captures differences
-  in uncertainty between individual patients who are more common in the model development
-  data compared to patients who are less common. Surprisingly, effective sample size for predictions
-  of specific patients early on in follow-up can be larger than the total development
-  sample size. While this can be considered misleading in communication with patients,
-  it does show that variance estimation of Cox model predictions is too optimistic
-  early on in follow-up. In conclusion, effective sample size for the Cox model
-  can inform about the uncertainty of individual predictions, but there are 
-  unintuitive aspects, that make it unsuitable for communication with patients."
+abstract: "Prognostic models are important to provide predictions for survival probabilities of individual patients. We aimed to explore the uncertainty for the Cox proportional hazards model for prediction of survival probabilities at different time points during follow-up. We hereto expand the concept of effective sample size, which translates uncertainty into a number of ‘patients like you’ that a prediction is effectively based on. Effective sample size and its properties were investigated in a real data example of colon cancer patients. Simulation studies clarified differences between hypothesized and observed behavior, related to the variance caused by the baseline hazard and coefficient estimation. Surprisingly, effective sample size for predictions of specific patients early on in follow-up can be larger than the total development sample size. While this can be considered misleading in communication with patients, we see value in using effective sample size for the investigation of individual uncertainty during model development.
+In conclusion, uncertainty of predictions from the Cox model has unintuitive aspects which limits the suitability of measures such as effective sample size for communication with patients for relatively early follow-up times. More research is needed on the role of effective sample size for at late follow-up times."
 number-sections: true
 bibliography: references.bib
+csl: american-medical-association.csl
 ---
 
 
 ## Introduction
-Prognostic models with survival outcomes are abundant in disease areas such as oncology cardiology. Examples are the Melanoma Institute Australia models which provide survival predictions for multiple stages of melanoma [@pires2022; @varey2024] and the PREDIC model with aims to predict the benefit of treatment to survival probability [@predict]. Such models can provide value in clinical decision-making and patient counseling.
+Prognostic models with survival outcomes are abundant in disease areas such as oncology and cardiology. Examples are the Melanoma Institute Australia models which provide survival predictions for multiple stages of melanoma,[@pires2022; @varey2024] the PREDICT model breast cancer treatment decision support,[@predict] and the QRISK3 algorithm predicting the 10-year risk of cardiovascular disease.[@qrisk] Proper implementation of such prediction algorithms holds the promise to improve shared decision-making.[@4Dpicture] 
 
-Uncertainty is an important element of predictions from prognostic models. If and how these models communicate uncertainty in the predicted survival probability to end-users varies a lot. Among the risk calculators of the Melanoma Institute Australia, the risk calculator for immunotherapy outcome makes no mention of prediction uncertainty [@pires2022]. The risk calculator for stage II melanoma survival does show 95% confidence intervals around all shown survival predictions [@varey2024].
+Uncertainty is an important element of predictions from prognostic models. It is unclear if and how uncertainty in the predicted survival probability should be communicated. Some risk calculators make no mention of prediction uncertainty,[@qrisk; @pires2022] while others show 95% confidence intervals around predicted survival probabilities[@varey2024] or treatment benefit.[@predict]
 
-At model development, at least we should be able to estimate the overall event rate with some reasonable certainty. For example, we may require a minimum number of events of 100 [@steyerbergboek]. Moreover, larger model complexity implies a need for larger numbers, as reflected in rules of thumb for the number of events per variable (EPV) such as 10 to 15 EPV for proportional hazards regression [@peduzzi1995;@harrellbook]. Such general rules have received criticism, because they don't work in all situations [@courvoisier2011]. New methods to calculate the correct sample size or EPV that take into consideration more aspects of the prediction model have been suggested [@riley2019]. More recently, focus has shifted to the stability of models and the uncertainty in predictions [@altman1989; @shen2016; @riley2023; @riley2023b; @barrenada2025; @riley2025].  
+During model development, it is often considered that a model should have some minimal level of certainty in its predictions. For example, we may require a minimum number of events of 100 in order to estimate the overall event rate with some certainty.[@steyerbergbook;@harrellblog] Moreover, larger model complexity implies a need for larger numbers, as reflected in rules of thumb for the number of events per variable (EPV) such as 10 to 15 EPV for proportional hazards regression.[@peduzzi1995; @harrellbook] Such general rules have received criticism[@vansmeden2016] and novel methods calculate sample size or EPV considering more aspects of the prediction model.[@riley2019] More recently, focus has shifted to the stability of models and the individual uncertainty in predictions.[@altman1989; @shen2016; @riley2023; @riley2023b; @barrenada2025; @riley2025]
 
-Effective sample size has been suggested as a promising summary measure of individual uncertainty in generalized linear models and machine learning models [@thomassen2024; @thomassen2025]. Effective sample size for a prediction for a patient can be interpreted as the number of patients with the same covariate values that the prediction would effectively be based on. For analysis of survival data, the concept of effective sample size was presented already by @kaplanmeier1958.). We recently illustrated that effective sample size provides a valuable and readily interpretable measure of uncertainty for survival curves in the presence of censoring [@hackmann2025]. Effective sample size needs further extension to survival predictions based on combinations of prognostic factors, as commonly provided by a Cox proportional hazards model in medical research. Such an extension might be used for the communication of uncertainty with individual patients, but also during model development, to investigate groups for which there may not be sufficient information on which to base predictions [@thomassen2025].
+Effective sample size has been suggested as a promising summary measure of individual uncertainty in generalized linear models and machine learning models.[@thomassen2024;@thomassen2025] Effective sample size for a prediction for a patient can be interpreted as the number of patients with the same covariate values that the prediction was effectively based on. For analysis of survival data, the concept of effective sample size was presented already by Kaplan and Meier.[@kaplanmeier1958] We recently illustrated that effective sample size provides a valuable and readily interpretable measure of uncertainty for survival curves in the presence of censoring.[@hackmann2025] Effective sample size needs further extension to survival predictions based on combinations of prognostic factors, as commonly provided by a Cox proportional hazards model in medical research. 
 
-In this study, we aim to extend previously developed approaches [@thomassen2025; @hackmann2025] for effective sample size estimation to the Cox model. We hypothesize that effective sample size may be valuable for expressing individual uncertainty in predictions based on multiple prognostic factors, with appropriate handling of censored observations as for Kaplan-Meier curves. For effective sample size to be an intuitive measure of uncertainty, we have two requirements that we will investigate:
+In this study, we aim to extend previously developed approaches[@thomassen2025;@hackmann2025] for effective sample size estimation to the Cox model. We hypothesize that effective sample size may be valuable for expressing individual uncertainty in predictions based on multiple prognostic factors, with appropriate handling of censored observations as for Kaplan-Meier curves. For effective sample size to be an intuitive measure of uncertainty, we have two requirements that we will investigate:
+1.	Natural behavior: Effective sample size reflects the size of a sample with complete follow-up, accommodating censoring 
+2.	Reflection of exceptionality: Effective sample size reflects the exceptionality of a patient profile within the development data
+This paper continues with of a description of calculating the effective sample size based on the variance of predictions of the Cox model (section 2), followed by application of effective sample size calculations to Cox models in an illustrative data set (section 3). We explore effective sample size in more depth in simulations (section 4) and end with a discussion (section 5), where we reflect on its potential use in communication and model development.
 
-1. Effective sample size reflects the size of a sample with complete follow-up, accommodating censoring naturally
-
-2. 2.	Effective sample size reflects the commonality or exceptionality of a patient profile within the development data
-
-This paper continues with of a description of calculating the effective sample size based on the variance of predictions of the Cox model (section 2), followed by application of effective sample size calculations to Cox models in an illustrative data set (section 3). We explore effective sample size in more depth in simulations (section 4) and end with a discussion (section 5).
-
-<!-- TOT HIER AANGEPAST (behalve abstract) -->
 
 ## Effective sample size for the Cox model {#sec-data-methods}
-### Setting
+### Effective sample size
 We consider a survival prediction for a specific new patient named ('Sam') at a predetermined time $t$ using a Cox model. This is a personalized survival prediction $\hat S(t | \mathbf{x}_{Sam}) = \hat S_{Sam}(t)$, based on their covariate values $\mathbf{x}_{Sam}$. We take as a reference the situation where we have a number $N_*$ of patients that all have the same covariate values $\mathbf{x}_{Sam}$ as Sam. In this virtual sample, we can observe the mean outcome $\bar S_*(t)$ at time $t$. With $\bar S_*(t) = \hat S_{Sam}(t)$, we can calculate the number $N_*$ as the number of patients required to obtain the same certainty in our estimation of $\bar S_*(t)$, as the model estimation of $\hat S_{Sam}(t)$. This number $N_*$ is the effective sample size.
 
-### Definition
 If we assume that all patients with the same covariate values have the same variance, we can estimate $N_*$ using:
 $$
 N_* := \frac{V(\bar S_*(t))}{V(\hat S_{Sam}(t))},
 $${#eq-n_eff}
-where $V(\bar S_*(t)) = \bar S_*(t)\left(1-\bar S_*(t)\right)$ is the binomial variance and $V(\hat S_{Sam}(t))$ is the variance of the Cox model estimate for Sam. For the variance of the Cox model, different estimation procedures of the variance can be used. We will use a standard definition for the Cox model variance based on the delta method [@tsiatis1981; @andersen1993], which is implemented in frequently used software for survival analysis [@package-survival; @mstate2011].  The variance of a Cox model prediction for Sam is:
+where $V(\bar S_*(t)) = \bar S_*(t)\left(1-\bar S_*(t)\right)$ is the binomial variance and $V(\hat S_{Sam}(t))$ is the variance of the Cox model estimate for Sam. 
+
+### Variance
+For the variance of the Cox model, different estimation procedures of the variance can be used. We will use a standard definition for the Cox model variance based on the delta method [@tsiatis1981; @andersen1993], which is implemented in frequently used software for survival analysis [@package-survival; @mstate2011].  The variance of a Cox model prediction for Sam is:
 
 $$
 V(\hat S_{Sam}(t)) = \hat V\left( \hat S(t | \mathbf{x}_{Sam})\right)\biggr\rvert_{\beta} + \left( \frac{\partial\hat S}{\partial\beta}\right)\Biggr\rvert^\intercal_{\beta = \hat \beta} \hat V(\hat \beta) \left( \frac{\partial\hat S}{\partial\beta}\right)\Biggr\rvert_{\beta = \hat \beta},
 $${#eq-cox_var}
-where $\hat V\left( \hat S(t| \mathbf{x}_{new})\right)\biggr\rvert_{\beta}$ is the variance of the baseline hazard under correct coefficient estimation and $\left( \frac{\partial\hat S}{\partial\beta}\right)\Biggr\rvert^\intercal_{\beta = \hat \beta} \hat V(\hat \beta) \left( \frac{\partial\hat S}{\partial\beta}\right)\Biggr\rvert_{\beta = \hat \beta}$ is the variance caused by misestimation of the coefficients. The variance of the baseline hazard can be estimated using:
+where $\hat V\left( \hat S(t| \mathbf{x}_{new})\right)\biggr\rvert_{\beta}$ is the variance of the baseline hazard under correct coefficient estimation and $\left( \frac{\partial\hat S}{\partial\beta}\right)\Biggr\rvert^\intercal_{\beta = \hat \beta} \hat V(\hat \beta) \left( \frac{\partial\hat S}{\partial\beta}\right)\Biggr\rvert_{\beta = \hat \beta}$ is the variance caused by estimation of the coefficients. The variance of the baseline hazard can be estimated using:
 $$
 \hat{S}^2(t| \mathbf{x}_{new}) \mathrm{exp}(2\hat{\mathbf{\beta}}^\top\mathbf{x}_{Sam}) \left( \sum_{i=1}^l \frac{1}{\left\{ \sum_{j\in R_i} \mathrm{exp}(\hat{\mathbf{\beta}}^\top \mathbf{x}_{j}) \right\}^2} \right),
 $${#eq-cox_var_basehaz}
-which is the Aalen formula for the variance of the baseline survival function based on the risk-weighted number at risk, muliplied by the squared relative risk of our new patient Sam. 
+which is the Aalen formula for the variance of the baseline survival function based on the risk-weighted number at risk, multiplied by the squared relative risk of our new patient Sam. 
 
 The uncertainty from the estimation of the coefficient depends on the variance of the coefficients and the gradient of the survival function w.r.t. the coefficients. The variance of the coefficients $\hat V(\hat\beta)$, is the inverse Fisher information matrix $\mathcal{I}(\beta)^{-1}$. Finally, we can estimate the gradient of the survival function with respect to the coefficient by:
 $$
@@ -107,18 +95,26 @@ w_p = \sum_{i=1}^l \frac{1}{\sum_{j\in R_i}\mathrm{exp}(\hat{\mathbf{\beta}}^\to
 $${#eq-cox_var_wp}
 We can see in the definition of $\mathbf{w}_p$ that the variance, and therefore effective sample size, depends on the difference between our patient's new covariate $x_{Sam, p}$ and the distribution of $x_p$ in the risk set.
 
-Note that other methods exist for calculating the variance, such as the von Mises expansion [@vandervaart1998], implemented in [@riskRegression]. Any method works for estimating effective sample size using @eq-n_eff, however the estimate may be different, because of differences in estimated variance.
+Note that other methods exist for calculating the variance, such as the Von Mises expansion[@vandervaart1998; @riskRegression], or by using the infinitesimal jackknife.[@survival-vignette] Any method works for estimating effective sample size using @eq-n_eff, however the estimate may be different, because of differences in estimated variance.
+
+### Software
+All analyses were conducted in `R`[@R], version 4.5.1, using the packages `survival`[@package-survival] and `mstate`.[@mstate2011] Simulations were run using the `simsurv` package.[@package-simsurv] Code used for this article, including functions that can calculate the effective sample size for a `survfit.coxph` object in `R` can be found on GitHub: xxxxx.
 
 ## Application to colon cancer data
 ### Data description
-We used data the `colon` data that is available within the `survival` package in `R` [@R; @package-survival]. This data set contains results from a trial of adjuvant levimasole or levimasole+5-fluorouracil compared to observation only in 929 patients [@laurie1989; @moertel1995]. Mortality was the primary outcome, which was observed in 452 of 929 patients. Four baseline prognostic factors were considered in this study, treatment and adhesion of the tumor as categorical variables and age and number of positive lymph nodes as continuous variables. The distribution of these variables in the data can be seen in Supplement 2.
+We performed analyses in the `colon` data set as available within the `survival` package[@package-survival] in `R` . This data set contains patients enrolled in a trial of adjuvant levimasole or levimasole+5-fluorouracil compared to observation only in 929 patients.[@laurie1989; @moertel1995] Mortality was the primary outcome, which was observed in 452 of 929 patients. Four baseline prognostic factors were considered in this study: with treatment as randomized (‘rx’); adhesion of the tumor (‘adhere') as categorical variables; and age (‘age’) and number of positive lymph nodes (‘nodes’) as continuous variables (Figure S1).
 
 ### Illustration with one predictor
-Effective sample sizes for Cox model predictions were much higher than those of stratified Kaplan-Meier curves for early time points. The difference in effective sample size between Cox model predictions and Kaplan-Meier decreased over time with increasing number of events. 
+We compared Cox models with a single predictor to Kaplan-Meier curves for the two categorical variables. Effective sample sizes for Cox model predictions were much higher than those of stratified Kaplan-Meier curves for early time points. Effective sample size was higher than the total development sample size for early survival estimates of patients in the Lev+5FU treatment arm and those in the No adhesion group. This difference in effective sample size decreased over follow-up time with increasing number of events (@fig-category). The higher effective sample for the Cox predictions matched with narrower confidence intervals around predicted survival curves compared to the Kaplan-Meier curves for these groups, especially early on in follow-up (Figure S2).
+
+For Cox models including a continuous covariate as single predictor, effective sample size depended on covariate values. Patients with a common (median) age, the effective sample size was close to the total number of patients in the population until censoring started to impact effective sample size (@fig-continuous). For patients with uncommon (75th percentile) or rare (99th percentile) ages, the effective sample size was very low during early follow-up. For all three example patients, their survival predictions (dotted lines) were very similar, since the prognostic effect of age was very small. So, the uncertainty was large for predictions for patients with relatively rare ages, despite minor prognostic impact of age.
+
+For the number of nodes, the common value was 2 positive nodes (median), while 5 was uncommon (75th percentile) and 17 was rare (99th percentile). Patients with 2 nodes had an effective sample size of more than 1000 early on in follow-up, which was higher than the total sample size of 929. Remarkably, for a patient with 17 nodes, the effective sample size of their prediction increased over time as their survival probability approached 0 (@fig-continuous).
+
 
 ```{r}
 #| echo: FALSE
-#| output: TRUE
+#| output: FALSE
 #| message: FALSE
 #| warning: FALSE
 #| label: fig-category
@@ -230,7 +226,7 @@ plotx <- ggplot() +
             lwd = 1.3, alpha = 0.5) +
   geom_line(aes(x = cox_rx_2$time, y = cox_rx_2$lower, color = "Cox", linetype = "95% CI"),
             lwd = 1.3, alpha = 0.5) +
-
+  
   # Kaplan–Meier curves
   geom_line(aes(x = km_rx_2$time, y = km_rx_2$surv, color = "Kaplan-Meier", linetype = "Prediction"),
             lwd = 1.3, alpha = 0.5) +
@@ -238,7 +234,7 @@ plotx <- ggplot() +
             lwd = 1.3, alpha = 0.5) +
   geom_line(aes(x = km_rx_2$time, y = km_rx_2$lower, color = "Kaplan-Meier", linetype = "95% CI"),
             lwd = 1.3, alpha = 0.5) +
-
+  
   # Double arrow for Kaplan–Meier at t = 480
   geom_segment(
     {
@@ -250,7 +246,7 @@ plotx <- ggplot() +
     linewidth = 1.2,
     arrow = arrow(length = unit(0.15, "cm"), ends = "both", type = "closed")
   ) +
-
+  
   # Double arrow for Cox at t = 520
   geom_segment(
     {
@@ -262,7 +258,7 @@ plotx <- ggplot() +
     linewidth = 1.2,
     arrow = arrow(length = unit(0.15, "cm"), ends = "both", type = "closed")
   ) +
-
+  
   scale_color_manual(values = color_values) +
   scale_linetype_manual(values = linetype_values) +
   theme_minimal() + 
@@ -279,15 +275,10 @@ ggsave("images/compare_ci.svg", width = 13, height = 7, dpi = 300)
 
 ```
 
-@fig-category shows that the effective sample size for the patients with `Lev+5FU` treatment have an effective sample size that is higher than the total sample size of 929 early on in follow-up. The category with this higher effective sample size has a HR below 1 compared to both other categories. We can check to see if higher effective sample size does translate to narrower confidence intervals by comparing the confidence interval of the Cox model prediction for a patient with `Lev+5FU` treatment to the confidence interval of the Kaplan-Meier curve for this group. In @fig-compare-ci we do indeed see that the confidence interval of the Cox model prediction is narrower than that of the Kaplan-Meier curve, especially early on in follow-up.  
-
-For Cox models based on continuous variables, effective sample size can vary highly depending on covariate values. In @fig-continuous we note that for patients with common (median) age, the effective sample size stayed close to the total number of patients in the population until censoring starts to impact effective sample size. For patients with uncommon (75th percentile) or rare (99th percentile) ages, the effective sample size decreased very rapidly during early follow-up. For all three example patients, their survival predictions (dotted lines) were very similar, since the prognostic effect of age was very small.
-
-For the number of nodes, the common value is 2 positive nodes (median), the uncommon is 5 positive nodes (75th percentile) and the rare value is 17 (99th percentile). Patients with 2 nodes have an effective sample size of more than 1000 early on in follow-up, higher than the total sample size of 929. Additionally, for a patient with 17 nodes, the effective sample size of their prediction increases over time as their survival probability approaches 0. 
 
 ```{r}
 #| echo: FALSE
-#| output: TRUE
+#| output: FALSE
 #| message: FALSE
 #| warning: FALSE
 #| label: fig-continuous
@@ -500,7 +491,25 @@ plot <- ggplot(out_df) +
 # Print the plot
 plot
 save(plot, file = "images/fig-distribution.RData" )
+ggsave("images/fig-distribution.svg", width = 13, height = 10, dpi = 300)
 rm( list = ls())
+
+
+LL_null <- cox_model2$loglik[1]   # null model loglik
+n <- nrow(colon_df)
+
+R2_CS <- function(LL_model) {
+  1 - exp((2/n) * (LL_null - LL_model))
+}
+
+R2_base <- R2_CS(cox_model2$loglik[2])
+R2_nodes <- R2_CS(cox_model3$loglik[2])
+R2_age <- R2_CS(cox_model4$loglik[2])
+
+delta_R2_nodes <- R2_nodes - R2_base
+delta_R2_age <- R2_age - R2_nodes
+print(paste0("Delta R^2 after addition of nodes is: ", round(delta_R2_nodes*100, 2), "%"))
+print(paste0("Delta R^2 after addition of age is: ", round(delta_R2_age*100, 2), "%"))
 ```
 ```{r}
 #| echo: FALSE
@@ -517,23 +526,21 @@ load("images/fig-distribution.RData")
 plot
 ```
 
-In @fig-distribution we can see the predicted survival probabilities plotted against effective sample sizes for each of the patients in the data based on the Cox models. The addition of adhesion to a model based only on treatment adds some changes in predicted probability, but decreases the effective sample size for part of the patients substantially. Similarly, the addition of nodes decreases the effective sample size for many patients, while also increasing the spread in predicted survival outcomes. In contrast, the addition of age to this model shows very little increase in prediction spread while there is much more heterogeneity in effective sample sizes. Indeed, `age` was a relatively weak predictor (univariate Nagelkerke $R^2$ 0.025\%) of survival outcome, whereas `nodes` was a much stronger predictor (univariate Nagelkerke $R^2$ 6.1\%).
-
-### Is effective sample size intuitive?
-Effective sample size for Cox model predictions does seem to reflect size of a hypothetical sample of $N_{eff}$ patients at later follow-up times. In @fig-category we see that effective sample size decreases towards the Kaplan-Meier effective sample size with increasing follow-up and then decrease due to censoring at a similar time. In @fig-distribution, we can also see that the addition of variables to the Cox model increases the spread in effective sample sizes, reflecting the heterogeneity in available information for patients with different covariate values.
-
-Effective sample size for the Cox model does show intuitive aspects with respect to the differences between effective sample size for patients with uncommon and common covariate values. Patients with exceptional covariate values have their effective sample size reduced very quickly after the start of follow-up. Patients with common covariate values, such as the sample mean/median as seen in @fig-continuous, have effective sample sizes very close to the complete development sample size in the absence of censoring.
-
-However, in @fig-category we can see that the effective sample size for at least one of the categories of patients has an effective sample size larger than the total development sample size. This does not align with an intuitive understanding of effective sample size a this hypothetical sample of $N_{eff}$ patients like you that a prediction is based on, since we know for certain that there were fewer.
-Additionally, the observation in @fig-continuous that effective sample size can increase later in follow-up is unintuitive, since it does not make sense that after uncertainty of predictions decreases after patients were censored.
-
+The addition of adhesion to a model based only on treatment (‘rx’) changed the predicted probabilities, and decreased the effective sample size for the substantially for patients with lower survival predictions than in the treatment-only model. Similarly, the addition of nodes decreased the effective sample size for many patients, while also increasing the spread in predicted survival outcomes. In contrast, the addition of age to this model showed a minor increase in spread of the predictions, while there was much more heterogeneity in effective sample sizes. Indeed, age was a weak predictor (delta Cox-Snell $R^2$ 0.15\%) of survival outcome, whereas nodes was a much stronger predictor (delta Cox-Snell $R^2$ 7.66\%).
 
 ## Investigation of effective sample size in simulations
 ### Simulation setting
-We ran simulations with the aim of understanding when effective sample size would be higher than the total sample size. For this purpose, survival times were simulated first without any censoring and with only one binary predictor variable, reflecting survival in men and women. A hazard ratio of 2 for men compared to women was chosen for illustration. Sample size in the simulation was set to 10,000 (5,000 men and 5,000 women) to ensure that the hazard ratio could be accurately estimated between the two groups. Baseline hazard for the simulation was set to a constant of 1, and maximum follow-up was set to 10 years.
+To understand when and why effective sample size can be higher than the development sample size, simulations were run without censoring and with one binary variable: ‘sex’. A hazard ratio of 2 for men compared to women was chosen for illustration. Sample size in the simulation was set to 10,000 (5,000 men and 5,000 women) to ensure that the hazard ratio could be accurately estimated between the two groups. Baseline hazard was set to a constant of 1, and maximum follow-up was set to 10 years.
 
-### Simulation
-Cox model and Kaplan-Meier survival estimates are similar for both groups. This is expected, since the data were generated with proportional hazards (HR of $2$ for 5,000 men compared to 5,000 women) for one categorical predictor (sex). The Kaplan-Meier effective sample sizes for both groups remain constant at $5,000$, the number of observations in each of the groups because there is no censoring. The Cox model effective sample size begins at $15,000$ for women (the group with lower hazard) and at $7,500$ for men (the group with higher hazard). Additionally, effective sample size for men increases after $t=7.5$.
+### Simulation results
+Cox model and Kaplan-Meier survival estimates were identical for both groups. The Kaplan-Meier effective sample sizes for both groups remained constant at 5,000. This is consistent with the number of observations in each of the groups because there was no censoring.[@hackmann2025] The Cox model effective sample size started at 15,000 for women (the group with lower hazard) and at 7,500 for men (the group with higher hazard). Additionally, the effective sample size for men increased after t=7.5.
+To investigate both of these unexpected behaviors of effective sample size in more detail we separated the variance of the Cox model prediction into the variance caused by the estimation of the baseline hazard (first term in Equation 2) and the variance caused by the estimation of the coefficient (second term in Equation 2, Figure 4C and 4D ).
+
+
+Early on in follow-up the women had a lower hazard and an effective sample size higher than the total sample size. This is attributable to the estimation of variance of the baseline hazard, since this component was the source of nearly all of the variance early on in follow-up (Figure 4A). The incremental increase in variance due to coefficient estimation for men was about the same as that of the baseline hazard after t=5. For women, it was about the same up to t=7.5, after which the increment of the coefficient variance became substantially smaller than that of the baseline hazard. This coincides with the inflection point where the percentage contribution of the baseline hazard began to increase again.
+
+
+
 ```{r}  
 #| echo: FALSE
 #| output: FALSE
@@ -697,7 +704,7 @@ save.image(file = "output/combined_simN.RData")
 
 ```{r}  
 #| echo: FALSE
-#| output: TRUE
+#| output: FALSE
 #| message: FALSE
 #| warning: FALSE
 #| label: fig-sim
@@ -708,9 +715,6 @@ save.image(file = "output/combined_simN.RData")
 load("output/combined_simN.RData")
 print(combined_plot)
 ```
-We investigate both of these unexpected behaviours of effective sample size in more detail by looking at the variance of the Cox model predictions. We split the variance of the Cox model prediction into the variance caused by the estimation of the baseline hazard (first term of r.h.s. sum (@eq-cox_var)) and the variance caused by the inaccurate estimation of the coefficient and its effect on the survival outcome (second term of r.h.s. sum (@eq-cox_var)). 
-
-In @fig-variance-inc (l.h.s.), the contribution to the total variance of the baseline hazard estimation as a percentage of total variance is shown. We find that early on in follow-up the group with a lower hazard has an effective sample size which is higher than the total sample size. This is explained by the variance of the estimation of the baseline hazard, since this is the source of nearly all of the variance early on in follow-up (@fig-variance-inc). We can also look at the increment, or increase in standard error of the Cox model estimate with each subsequent event (@fig-variance-inc, r.h.s.). Here we see that the incremental increase in variance due to coefficient estimation for men is about the same as that of the baseline hazard after $t=5$. For women, it is about the same up to $t=7.5$, after which the increment of the coefficient variance becomes a lot smaller than that of the baseline hazard. This coincides with the inflection point where the percentage contribution of the baseline hazard begins to increase again.
 
 ```{r}
 #| echo: FALSE
@@ -758,7 +762,7 @@ plot
 ```
 ```{r}
 #| echo: FALSE
-#| output: TRUE
+#| output: FALSE
 #| message: FALSE
 #| warning: FALSE
 #| fig-width: 10
@@ -875,6 +879,151 @@ plot <- ggplot() +
 plot
 ```
 
+
+```{r}  
+#| echo: FALSE
+#| output: FALSE
+#| eval: FALSE
+#| message: FALSE
+#| warning: FALSE
+#| fig-width: 10
+#| fig-height: 6.2
+#| label: fig-sim-dev-cont
+#| fig-cap: "Simulation of survival data and effective sample sizes of survival estimates with no censoring and one continuous predictor."
+
+
+source("code/compile.R")
+require(surveillance)
+
+# Seed for consistency
+set.seed(1923)
+
+scale = c(10)
+shape = c(1) # shape 1 means exponential
+maxtime = 100 # maxtime
+hr = 2 # hazard ratio
+n = 10000 # number per group
+
+x <- data.frame(x = rnorm(n, 0, 1))
+events <- simsurv( dist="weibull", 
+gammas=shape, 
+lambdas=scale[1]^(-shape), 
+x=x,
+betas = c("x" = log(hr)),
+maxt=maxtime)
+events$x = x$x
+time <- sort(unique(events$eventtime))
+
+# Fit the models
+cox <- coxph(Surv(eventtime, status) ~ x, data = events)
+
+# Calculate effective N and stuff
+cox_mean <- survfit_n(survfit(cox, newdata = data.frame(x = 0)), cox, coef=T, chaz=T)
+cox_sd_plus <- survfit_n(survfit(cox, newdata = data.frame(x = 1)), cox, coef=T, chaz=T)
+cox_sd_min <- survfit_n(survfit(cox, newdata = data.frame(x = -1)), cox, coef=T, chaz=T)
+
+cox_mean <- sf_to_df(cox_mean, time = time)
+cox_sd_plus <- sf_to_df(cox_sd_plus, time = time)
+cox_sd_min <- sf_to_df(cox_sd_min, time = time)
+
+colors <- c("1" = "#37293F", "3" = "#2E7691",  "2" ="#C2666B", "4" = "#c6aa2c")
+linetype <- c("1" = "solid", "2" = "dashed")
+
+# plot the effective sample sizes all in one plot
+plot1 <- ggplot() +
+geom_line(aes(x = time, y = cox_mean$n.eff, color = "1"), size = 1.2) +
+geom_line(aes(x = time, y = cox_sd_plus$n.eff, color = "2"), size = 1.2) +
+geom_line(aes(x = time, y = cox_sd_min$n.eff, color = "3"), size = 1.2) +
+scale_x_continuous(name = NULL, labels = NULL, limits = c(0, 15)) +
+scale_y_continuous(name = "Effective Sample Size (N)", limits = c(0, 15000)) +
+#ggtitle("Effective Sample Size of Coxph and Survfit") +
+labs( color = "Legend", tag = "(B)") +
+scale_color_manual(
+values = colors,
+labels = c("Mean", "+1 SD", "-1 SD")
+) +
+theme_minimal() +
+theme(legend.position = "right") + 
+guides(colour = guide_legend(override.aes = list(alpha = 1)))
+
+
+# plot the two kaplan-meiers overlapping in one plot and the cox survival predictions for the 0 an 1 treatment patients
+plot2 <- ggplot() +
+geom_line(aes(x = time, y = cox_mean$surv*100, color = "1"), size = 1.2) +
+geom_line(aes(x = time, y = cox_sd_plus$surv*100, color = "2"), size = 1.2) +
+geom_line(aes(x = time, y = cox_sd_min$surv*100, color = "3"), size = 1.2) +
+scale_x_continuous(name = "Time", limits = c(0, 15)) +
+scale_y_continuous(name = "Predicted survival (%)", limits = c(0, 100)) +
+#ggtitle("Survival of Coxph and Survfit") +
+labs( color = "Legend", tag = "(A)") +
+scale_color_manual(
+values = colors,
+labels = c("Mean", "+1 SD", "-1 SD")
+) +
+theme_minimal() +
+theme(legend.position = "none") + 
+guides(colour = guide_legend(override.aes = list(alpha = 1))) 
+
+scaleFactor = 0.00003/1
+
+plot3 <- ggplot() +
+geom_line(aes(x = time, y = cox_mean$std.chaz^2, color = "1", lty = "1"), size = 1, lwd = 1.2) +
+geom_line(aes(x = time, y = cox_sd_plus$std.chaz^2, color = "2", lty = "1"), size = 1, lwd = 1.2) +
+geom_line(aes(x = time, y = cox_sd_min$std.chaz^2, color = "3", lty = "1"), size = 1, lwd = 1.2) +
+geom_line(aes(x = time, y = cox_mean$std.err^2, color = "1", lty = "2"), size = 1, lwd = 1.2) +
+geom_line(aes(x = time, y = cox_sd_plus$std.err^2, color = "2", lty = "2"), size = 1, lwd = 1.2) +
+geom_line(aes(x = time, y = cox_sd_min$std.err^2, color = "3", lty = "2"), size = 1, lwd = 1.2) +
+scale_x_continuous(name = "Time", limits = c(0, 15)) +
+scale_y_continuous(name = "Variance of Cox model", limits = c(0, 0.003)) +
+#ggtitle("Increment of standard error") +
+labs( color = "Legend", tag = "(D)") +
+scale_color_manual(
+values = colors,
+labels = c("Mean", "+1 SD", "-1 SD")
+) +
+scale_linetype_manual(
+values = linetype,
+labels = c( "Baseline hazard", "Total variance" ) ) +
+theme_minimal() +
+theme(legend.position = "none") + 
+guides(colour = guide_legend(override.aes = list(alpha = 1)))
+
+
+plot4 <- ggplot() +
+geom_line(aes(x = time, y = cox_mean$std.chaz^2/cox_mean$std.err^2*100, color = "1"), size = 1, lwd = 1.2) +
+geom_line(aes(x = time, y = cox_sd_plus$std.chaz^2/cox_sd_plus$std.err^2*100, color = "2"), size = 1, lwd = 1.2) +
+geom_line(aes(x = time, y = cox_sd_min$std.chaz^2/cox_sd_min$std.err^2*100, color = "3"), size = 1, lwd = 1.2) +
+scale_x_continuous(name = "Time", limits = c(0, 15)) +
+scale_y_continuous(name = "Percentage of variance from h0", limits = c(0, 100)) +
+
+#ggtitle("Proportion of variance from baseline hazard") +
+labs( color = "Legend", tag = "(C)") +
+scale_color_manual(
+values = colors,
+labels = c("Mean", "+1 SD", "-1 SD")
+) +
+theme_minimal() +  
+theme(legend.position = "right") + 
+guides(colour = "none")
+
+# Combine the plots using patchwork and add a single legend on the right
+combined_plot <- ( (plot2 | plot1) / (plot4 | plot3) ) +
+plot_layout(guides = "collect") &
+theme(legend.position = "right")
+
+
+
+# Print the combined plot
+print(combined_plot)
+ggsave("images/fig-sim-cont.svg", width = 13, height = 10, dpi = 300)
+
+
+#save(cox_n0, file = "output/cox_n0.RData")
+#save(cox_n1, file = "output/cox_n1.RData")
+save.image(file = "output/combined_simN_cont.RData")
+#rm( list = ls())
+```
+
 #### Heuristic explanation: Baseline hazard estimation
 The baseline hazard for the Cox model at time $t_i$ with $\delta_i$ events is $\frac{\delta_i}{\sum_{j\in R_i}\exp(\beta'X_j)}$, where the denominator is the risk-weighted number at risk. This risk-weighted number at risk is the implicit sample size used for the baseline hazard estimation. A heuristic explanation for the effective sample sizes observed near $t=0$ in @fig-sim would be the following. Assuming the hazard ratio was correctly estimated by the model and there has been a single death in 10,000 patients. The risk-weighted number at risk in the data is $5,000\cdot2 + 5,000\cdot 1 = 15,000$. If you are a woman, your risk of being this first death are $\frac{1}{15,000}$, giving us an effective sample size of 15,000. If you are a man, your risk of being this first death are $\frac{2}{15,000} = \frac{1}{7,500}$, giving us an effective sample size of 7,500. 
 
@@ -885,8 +1034,6 @@ In @fig-variance-inc, we can see that the contribution of the coefficient estima
 
 At the time of the first event, the gradient (@eq-cox_var_grad) for both patients is $\frac{2}{45000}$ and the variance of the coefficient is constant. Therefore the uncertainty from possibly wrongly estimating the coefficient is the same for both groups. Calculating the absolute number at later time points is more difficult, because the gradient is a cumulative sum over all event times. We can look at the newest term of this sum in the gradient at time $t_i$. We choose $t=6.931$, which is the exact time where $S_{women}(6.931)=0.5$ and $S_{men}(6.931)=0.25$ (Supplement 7). If an event occurs at this time, the expected new addition to the cumulative sum of the gradient is $\frac{1}{10000}$ for women and $-\frac{2}{10000}$ for men because of the drift in the number of patients at risk from each of the groups. 
 
-\textbf{Maybe add additional stuff to explain why Neff can go up with low survival - talk to Jelle?} 
-Current idea: It has to do with the fact that the coefficient hazard decreases again for certain groups, in large part because of population shift - while $S(t)(1-S(t))$ going to 0 more slowly. So the variance does not increase as quickly as we would expect, as seen in the coefficient contribution for men in @fig-variance-inc.
 
 <!-- ## Parametric model -->
 <!-- A final simulation step is to compare the results of the Cox model effective sample size to that of proportional hazards parametric survival model, both well specified and misspecified. Our simulated data was from a Weibull(2, 1) hazard distribution with a hazard ratio of 2. First we fit a Weibull proportional hazards model, which is correctly specified. -->
@@ -1045,60 +1192,419 @@ save.image(file = "output/combined_exp.RData")
 <!-- ``` -->
 
 ## Discussion
-Effective sample size behaves in a complicated way for the Cox proportional hazards model. We will check our findings according to the criteria set in the introduction.
+This study shows that effective sample size behaves in a complicated way for the Cox proportional hazards model. We relate our findings to the criteria set in the introduction.
+1.	Natural behavior: Effective sample size for Cox model predictions only partly reflects the size of a sample with complete follow-up, accommodating censoring. The effective sample size starts out higher and decreases with longer follow-up. Without censoring, it decreases towards the effective sample size of a Kaplan-Meier estimate in a Cox model with one categorical variable. With censoring, effective sample size also decreases in line with the pattern seen in Kaplan-Meier effective sample size. Additionally, effective sample size can also increase with longer follow-up for patients with high hazard ratios.
+2.	Reflection of exceptionality: Effective sample size reflects the commonality of a patient profile within the development data. This criterium is met as shown in Figure 3. Patients with common profiles, such as the median age, have an effective sample size equal to the development sample size, while patients with exceptional age (99th percentile) have a low effective sample size.
 
-1. Effective sample size reflects the size of a sample with complete follow-up, accommodating censoring naturally.
-In some respects, effective sample size for the Cox model does align with this criterium. The effective sample size starts out higher and decreases with longer follow-up. Without censoring, it decreases towards the effective sample size of a Kaplan-Meier estimate in a Cox model with one categorical variable. After censoring, effective sample size also decreases to reflect this. However, effective sample size can also increase with longer follow-up for patients with high hazards. Sample size of a hypothetical study population tends not to increase with time, so this is unintuitive behaviour.
 
-2. Effective sample size reflects the commonality or exceptionality of a patient profile within the development data.
-We believe this criterium is met as shown in @fig-continuous. Patients with common profiles, such as the median age, can have an effective sample size equal to the development sample size for a long time, while patients with exceptional age (99th percentile) see a rapid decrease in their effective sample size after only a few events in the development data.
+#### Normality and linearity assumptions - ignore for now
+Effective sample size in linear regression is bounded by the total sample size.[@thomassen2024] For prediction from a linear regression model with multiple variables, a patient with exactly the population mean covariate values will have exactly the total development sample as effective sample size (Supplement 2). We might anticipate / expect that we are as certain of the event probability for such an average patient. 
 
-3. Effective sample size is not larger than the total sample size of the development data.
-Unfortunately, this criterium is violated in many cases early on in the follow-up. This in unintuitive and can lead to misunderstanding when communicated with patients. While this can be explained by the variance of the estimation of the baseline hazard, it does complicate communication early on in follow-up.
 
-While effective sample size for the Cox model does not seem intuitive for communicating uncertainty, it can help understanding the uncertainty in individual survival predictions. The expression of uncertainty as an absolute number of patients allows detailed discussion about the uncertainty of Cox model predictions. We will discuss the reason for the unintuitive effective sample size numbers and how this also affects 95% prediction intervals.
-
-### Unintuitive aspects of effective sample size
-Early on in follow-up, effective sample size can be larger than the total sample size. This may seem unreasonable for the communication of uncertainty in the prediction. This unnatural phenomenon is hidden when showing a confidence interval. We hypothesize that there are four factors that contribute to the effective sample size of Cox model predictions that make it less intuitive:
-1. Normality and linearity assumptions
-2. Issues with variance estimation when the event probability is very high or low
-3. Borrowing information
-4. Estimation of the baseline hazard
-
-#### Normality and linearity assumptions
-Already in effective sample size for linear regression models, we can see the first factor that contributes to higher effective sample sizes than we would expect. In linear regression we assume a linear effect an normally distributed covariates. Effective sample size in linear regression is bounded by the total sample size [@thomassen2024]. For prediction from a linear regression model with multiple variable, a patient with exactly the population mean covariate values will have exactly the total development sample as effective sample size (Supplement 2). Does it make intuitive sense that we are as certain of the event probability for such a patient, based on a model with a heterogeneous population, as we would have been if we observed this outcome in a sample of this number of exactly the same patient?
 
 #### Issues with variance estimation when the event probability is very high or low
-When the outcome variance is assumed to be according to a binomial distribution, with very high or very low event probabilities, $p(1-p)$ becomes very small. This small outcome variance can lead to inflated effective sample sizes for patients with very low or high event probabilities. This can be observed in logistic regression [@thomassen2024] and Cox models for high and low event probabilities (@fig-distribution). However, in Cox models effective sample size can also increase over time before the event rate becomes very low (@fig-sim).
+We may assume that the outcome variance behaves according to a binomial distribution. with variance p(1-p). This variance becomes very small with very high or very low event probabilities, inflating effective sample sizes. This phenomenon was observed for very low risk predictions based on a logistic regression model[@thomassen2024] and Cox models for high and low event probabilities (Figure 3 and Figure 4).
 
-#### Borrowing information
-Effective sample size can be interpreted as the number of patients like you that your prediction is based on. Modeling assumptions mean that we borrow information from other groups of patients as well. You might expect your effective sample size to be bound by the number of patients with your gender for a model based on age and gender. This is the case for linear regression, but not for logistic regression (Supplement 4). When adding an interaction term between the age and gender in the logistic regression model, effective sample size is lower than the number of patients in your subgroup again. This implies that the effective sample size being larger than your subset is caused by a combination of the model borrowing information from the other subgroups for the estimation of the continuous variable coefficient, together with an effect from the link function.
+### Communication of effective sample size
+Effective sample size may be valuable for the communication of uncertainty in clinical predictions with patients. It could be an addition or a replacement of a 95% confidence interval. Especially when a risk is communicated as “if we had 100 patients like you, we would expect X to survive”,[@kattan2002] effective sample size could be used to specify that it is not based on 100, but more or fewer patients.
 
-#### Estimation of the baseline hazard
-The estimation of the baseline hazard contributes most to the effective sample size early on in follow-up. This is because the coefficients have a relative effect on the baseline hazard and a relative effect on a very small hazard is a very small effect of the coefficient. The estimation of the baseline hazard has a big impact on the effective sample size and is a primary contributor to the unintuitive effective sample size early on in follow-up. Because the baseline hazard is estimated using the risk-weighted number at risk based on all patients, it is a very stable estimate. The assumption that there is a common baseline hazard and proportional covariate effects cause this certainty.
+For communication with patients, the behavior early in follow-up of effective sample size for the Cox model predictions may be problematic. It is counterintuitive and could be considered misleading. While the behavior can be explained (section 4.2.1), this does not prevent misinterpretation.
 
-\textbf{Discussion deel hierboven is te lang - onduidelijk wat de kern is. Het is denk ik wat dubbel op om eerst die 3 punten af te gaan en daarna nog 4 uitleg-punten. Misschien een van die twee schrappen ... welke?}
+However, the behavior early in follow-up may be less relevant than for predictions at later time points. In clinical fields such as cardiovascular disease, prediction models commonly have 10-year time horizons.[@visseren2021] Effective sample size behaves in line with our ‘natural behavior’ criterium for later follow-up times (Figure 3). 
 
 
 ### Cox model variance is too low
-The factors described above affect the effective sample size, but they do so through the variance of a Cox model prediction. When the effective sample size could be considered unreasonably large, the variance and resulting 95% confidence interval of the prediction could also be considered unreasonably small. Methods for simultaneous confidence bands for Cox model predictions exist [@lin1994], including software implementation [@riskRegression]. However, these are not common and most models simply connect the dots of pointwise confidence intervals [@sachs2022]. For models predicting a binary outcome, there is no destinction between a confidence and prediction interval, any additional uncertainty in predicting for new patients is captured in the aleatory uncertainty of a risk prediction [@steyerbergboek]. 
+When the effective sample size could be considered unreasonably large, the variance and resulting 95% pointwise confidence interval of the prediction could also be considered unreasonably small. Limited studies exist that investigate the confidence interval coverage of Cox model predictions, especially at the early times where effective sample size is higher than the development sample. It is known that Wald intervals for the survival function are rather poor[@burr1994] and they can be much improved through log or log-log transformations.[@link1984;@andersen1996] It is peculiar that the variance of a Cox model prediction for a patient with rather unique covariate values can be much larger than the total sample size early in follow-up. This implies that many more patients would be required for a similar level of certainty if a logistic regression model was used instead. It appears that much of this is caused by the low uncertainty of the baseline hazard early on in follow-up. The success of the Cox model may have had the unintended consequence of reduced effort towards studying the baseline hazard.[@hjort1992] Flexible parametric models have been suggested as an alternative that allows for a less erratic and more informative baseline hazard.[@royston2002] Studies comparing Cox models to parametric survival models have mostly focused on correct estimation of the coefficients.[@nardi2003] For the purposes of a survival prediction model, the absolute risk often matters most, with the baseline hazard as an essential component.
 
-\textbf{Ik kan geen goed artikel vinden waarin wordt gekeken naar coverage van het 95% CI van survival estimates vanuit Cox. Alle artikelen die kijken naar coverage kijken naar die van de beta's en dat is hier irrelevant.}
+```{r}
+#| echo: FALSE
+#| output: FALSE
+#| eval: FALSE
+#| message: FALSE
+#| warning: FALSE
+#| fig-width: 10
+#| fig-height: 6.2
+#| label: fig-sim-coverage
+#| fig-cap: "Simulation of the coverage of a Cox model prediction."
 
-### Effective sample size for the communication of uncertainty
-Effective sample size can be a tool for the communication of uncertainty. The interpretation helps with putting the certainty estimate into context. At later follow-up times, effective sample size shows reasonable estimates compared to the total sample size. It can be valuable to use effective sample size in the communication of uncertainty. However, for the Cox model specifically, effective sample size can be unreasonably high early on in follow-up. This is a problem for communication with patients, since it can lead to misunderstandings and overconfidence in the prediction. Therefore we would advise caution when using it to communicate uncertainty to patients.
 
+source("code/compile.R")
+require(surveillance)
+
+# Seed for consistency
+set.seed(1923)
+
+scale = c(10)
+shape = c(1) # shape 1 means exponential
+maxtime = 100 # maxtime
+hr = 2 # hazard ratio
+n = 5000 # number per group
+
+events <- simsurv( dist="weibull", 
+gammas=shape, 
+lambdas=scale[1]^(-shape), 
+x=data.frame(tx = c(rep(0, n), rep(1, n))),
+betas = c("tx" = log(hr)),
+maxt=maxtime)
+events$tx = c(rep(0, n), rep(1, n))
+events$eventtime[8885] <- 2.997671  # handmatig ties weghalen
+events$eventtime[6298] <- 5.668818  # werkt omdat seed vast staats
+time <- sort(unique(events$eventtime))
+time0 <- sort(unique(events[events$tx == 0, ]$eventtime))
+time1 <- sort(unique(events[events$tx == 1, ]$eventtime))
+
+# Fit the models
+sf0 <- survfit(Surv(eventtime, status) ~ 1, data = events[events$tx == 0,])
+sf1 <- survfit(Surv(eventtime, status) ~ 1, data = events[events$tx == 1,])
+cox <- coxph(Surv(eventtime, status) ~ tx, data = events)
+
+# Calculate effective N and stuff
+sf_n0 <- survfit_n(sf0) |> sf_to_df(time = time0)
+sf_n1 <- survfit_n(sf1) |> sf_to_df(time = time1)
+cox_n0 <- survfit_n(survfit(cox, newdata = data.frame(tx = 0)), cox, coef=T, chaz=T)
+cox_n1 <- survfit_n(survfit(cox, newdata = data.frame(tx = 1)), cox, coef=T, chaz=T)
+
+cox_n0 <- sf_to_df(cox_n0, time = time)
+cox_n1 <- sf_to_df(cox_n1, time = time)
+
+colors <- c("1" = "#37293F", "3" = "#2E7691",  "2" = "#9f84af", "4" = "#c6aa2c")
+linetype <- c("1" = "solid", "2" = "dashed")
+
+coverage = data.frame(time = c(0.01, 0.1, 0.5, 1, 5, 10), Neff_men = cox_n0[which.min(time<)]), coverage_men = NA, coverage_women = NA)
+for( B in 1:1000 ){
+outcomes_men <- simsurv( dist = "weibull",
+gammas = shape, 
+lambdas = scale[1]^(-shape), 
+x = data.frame(tx = rep(1, cox_n1$n.eff[1])),
+betas = c("tx" = log(hr)),
+maxt = maxtime)
+outcomes_women <- simsurv( dist = "weibull",
+gammas = shape, 
+lambdas = scale[1]^(-shape), 
+x = data.frame(tx = rep(0, cox_n0$n.eff[1])),
+betas = c("tx" = log(hr)),
+maxt = maxtime)
+
+}
+
+```
 
 ### Effective sample size in model development
-In @fig-distribution, we have shown that the addition of covariates to a Cox model has different impacts on the spread of predictions and effective sample sizes. This also shows that a balance must be struck between bias and variance to make predictions for individual patients. The addition of age to the treatment-only model, for example, only changed the predictions slightly, but decreased the effective sample size for older and younger patients substantially. This trade-off must be considered when developing individual prediction models. Effective sample size provides insight into such trade-offs. We only recommend using effective sample size in addition to other measures to indicate model performance such as the improvement in model fit, as expressed with R^2 values or Brier score.
+In Figure 3, we note that the addition of covariates to a Cox model has differential impacts on the spread of predictions and effective sample sizes. This implies that a balance must be struck between bias and variance to make predictions for individual patients. The addition of age to the treatment-only model, for example, only changed the predictions slightly, but decreased the effective sample size for older and younger patients substantially. This trade-off must be considered when developing prediction models for informing individual patients. Effective sample size provides insight into such trade-offs. Effective sample size may be valuable in addition to other measures to indicate model performance such as the improvement in model fit, as expressed with $R^2$ values or Brier score.[@vancalster2025]
 
-Additionally, in the full model in @fig-distribution, certain patients have extremely low effective sample sizes. Such low effective sample sizes can lead to subsets of patients that are excluded from the use of the model, because their predictions are too uncertain to be relied upon. Another option would be windsorizing the covariates or the patient values to values that are more common and therefore lead to more certain predictions.
+Additionally, certain patients may have extremely low effective sample sizes in the full model (Figure 3). Such low effective sample sizes imply that their predictions are too uncertain to be relied upon. Modelers may consider winsorizing the covariate values to obtain more certain predictions.[@royston2000;@aguinis2013] Moreover, variants of penalized prediction could be developed to stabilize predictions especially in the tails of continuous predictor values.[@houwelingen1990;@verweij1994] For example, elastic net regression has much higher minimum effective sample size than logistic regression.[@thomassen2025]
+
+Guidelines for the distribution of effective sample size are difficult to decide on, as much of it is context dependent. Suggestions could be a median effective sample size of at least 100 to ensure enough certainty for the majority of patients[@harrellblog] and a minimum effective sample size of at least 10.[@thomassen2024]
+
 
 ## Conclusion
 Effective sample size for the Cox model is an complicated measure for the uncertainty of individual survival predictions. Early on in follow-up, the survival probability and uncertainty are dominated by the estimated baseline hazard, such that the effective sample size for specific patient profiles can be higher than the total sample size. This reflects that the Cox model prediction variance is lower than the outcome variance in a sample of $N_{eff}$ patients with the same covariate values with complete follow-up.
 
 Hence, effective sample size can be misleading for short follow-up times. Effective sample size for Cox model predictions is more meaningful for late follow-up times. Further research is needed into the understanding of measures for uncertainty before communication with effective sample size is implemented in clinical practice.
 
+
+# New simulation study
+
+```{r}
+source("code/compile.R")
+require(surveillance)
+
+extract_sf <- function(sf_obj, tx, prevalence){
+  df <- sf_to_df(sf_obj, time_grid)
+  df$tx <- factor(tx)
+  df$prevalence <- prevalence
+  df
+}
+
+run_one <- function(rep_id, scale, shape, maxtime, hr, n, time_grid,
+                    model_type = c("standard", "robust")){
+
+  model_type <- match.arg(model_type)
+  
+  out_list <- list()
+
+  for(i in seq_along(scale)){
+    
+    prev_label <- c("50%", "25%", "10%", "5%")[i]
+    
+    # simulate
+    dat <- simsurv(
+      dist = "weibull",
+      gammas = shape,
+      lambdas = scale[i],
+      x = data.frame(tx = c(rep(0, n/2), rep(1, n/2))),
+      betas = c("tx" = log(hr)),
+      maxt = maxtime
+    )
+    
+    dat$tx <- c(rep(0, n/2), rep(1, n/2))
+    
+    # choose model
+    if(model_type == "standard"){
+      fit <- coxph(Surv(eventtime, status) ~ tx, data = dat)
+      model_label <- "Standard"
+    } else {
+      fit <- coxph(Surv(eventtime, status) ~ tx, data = dat, robust = TRUE)
+      model_label <- "Robust"
+    }
+    
+    # survfit_n
+    sf_n0 <- survfit_n(survfit(fit, newdata = data.frame(tx = 0)), fit, coef=TRUE, chaz=TRUE)
+    sf_n1 <- survfit_n(survfit(fit, newdata = data.frame(tx = 1)), fit, coef=TRUE, chaz=TRUE)
+    
+    df_i <- bind_rows(
+      extract_sf(sf_n0, 0, prev_label),
+      extract_sf(sf_n1, 1, prev_label)
+    )
+    
+    df_i$model <- model_label
+    
+    out_list[[i]] <- df_i
+  }
+  
+  df_rep <- bind_rows(out_list)
+  df_rep$replicate <- rep_id
+  
+  return(df_rep)
+}
+    
+
+
+# Seed for consistency
+set.seed(1923)
+
+scale = c(0.219, 0.0910, 0.0333, 0.0162)
+shape = c(0.5) # shape 1 means exponential
+maxtime = 10 # maxtime
+hr = 2 # hazard ratio
+n = 1000 # number per group
+time_grid <- seq(0, 10, by = 0.001)
+n_sim <- 10  # choose number of repeats
+
+df_standard <- bind_rows(
+  lapply(1:n_sim, function(r)
+    run_one(r, scale, shape, maxtime, hr, n, time_grid, model_type = "standard")
+  )
+)
+
+df_standard$prevalence <- factor(df_standard$prevalence, levels = c("50%", "25%", "10%", "5%"))
+df_standard <- df_standard %>%
+  group_by(tx, prevalence) %>%
+  mutate(events = max(n.risk) - n.risk)
+df_summary_std <- df_standard %>%
+  group_by(time, tx, prevalence) %>%
+  summarise(
+    n.eff = mean(n.eff),
+    surv = mean(surv),
+    events = mean(events),
+    .groups = "drop"
+  )  %>%
+  ungroup() %>%
+  group_by(tx, prevalence) %>%
+  mutate(events_rate = events / max(events),
+         surv_prop = (1-surv)/max(1-surv)) %>%
+  ungroup()
+
+
+
+
+
+colors <- c("0" = "#37293F", "1" = "#9f84af")
+
+linetypes <- c(
+  "50%" = "solid",
+  "25%" = "dashed",
+  "10%" = "dotted",
+  "5%" = "dotdash"
+)
+
+p_time <- ggplot(df_summary_std, aes(x = time, y = n.eff,
+                         color = tx,
+                         linetype = prevalence,
+                         group = interaction(tx, prevalence))) +
+  geom_line(linewidth = 1) +
+  geom_hline(yintercept = 1000, linetype = "dotted", color = "grey50") +
+  geom_hline(yintercept = 500,  linetype = "dotted", color = "grey50") +
+  scale_color_manual(values = colors, name = "Group") +
+  scale_linetype_manual(values = linetypes, name = "Baseline event rate") +
+  labs(x = "Time", y = "Effective sample size") +
+  scale_x_continuous(limits = c(0, 10)) +
+  scale_y_continuous(limits = c(0, 1600)) +
+  theme_minimal()
+
+p_event <- ggplot(df_summary_std, aes(x = events, y = n.eff,
+                           color = tx,
+                           linetype = prevalence,
+                           group = interaction(tx, prevalence))) +
+  geom_line(linewidth = 1) +
+  geom_hline(yintercept = 1000, linetype = "dotted", color = "grey50") +
+  geom_hline(yintercept = 500,  linetype = "dotted", color = "grey50") +
+  scale_color_manual(values = colors, name = "Group") +
+  scale_linetype_manual(values = linetypes, name = "Baseline survival") +
+  labs(x = "Number of events", y = "Effective sample size") +
+  scale_x_continuous(limits = c(0, 1000)) +
+  scale_y_continuous(limits = c(0, 1600)) +
+  theme_minimal()
+
+p_event_prop <- ggplot(df_summary_std, aes(x = events_rate, y = n.eff,
+                           color = tx,
+                           linetype = prevalence,
+                           group = interaction(tx, prevalence))) +
+  geom_line(linewidth = 1) +
+  geom_hline(yintercept = 1000, linetype = "dotted", color = "grey50") +
+  geom_hline(yintercept = 500,  linetype = "dotted", color = "grey50") +
+  scale_color_manual(values = colors, name = "Group") +
+  scale_linetype_manual(values = linetypes, name = "Baseline survival") +
+  labs(x = "Proportion of total events", y = "Effective sample size") +
+  scale_x_continuous(limits = c(0, 1)) +
+  scale_y_continuous(limits = c(0, 1600)) +
+  theme_minimal()
+
+
+
+df_large <- bind_rows(
+  lapply(1:n_sim, function(r)
+    run_one(r, scale, shape, maxtime, hr, 10000, time_grid, model_type = "standard")
+  )
+)
+
+df_large$prevalence <- factor(df_large$prevalence, levels = c("50%", "25%", "10%", "5%"))
+df_large <- df_large %>%
+  group_by(tx, prevalence) %>%
+  mutate(events = max(n.risk) - n.risk)
+df_summary_large <- df_large %>%
+  group_by(time, tx, prevalence) %>%
+  summarise(
+    n.eff = mean(n.eff),
+    surv = mean(surv),
+    events = mean(events),
+    .groups = "drop"
+  )
+
+
+p_time_large <- ggplot(df_summary_large, aes(x = time, y = n.eff,
+                         color = tx,
+                         linetype = prevalence,
+                         group = interaction(tx, prevalence))) +
+  geom_line(linewidth = 1) +
+  geom_hline(yintercept = 10000, linetype = "dotted", color = "grey50") +
+  geom_hline(yintercept = 5000,  linetype = "dotted", color = "grey50")
+  scale_color_manual(values = colors, name = "Group") +
+  scale_linetype_manual(values = linetypes, name = "Baseline event rate") +
+  labs(x = "Time", y = "Effective sample size") +
+    scale_x_continuous(limits = c(0, 10)) +
+  scale_y_continuous(limits = c(0, 16000)) +
+  theme_minimal()
+
+p_event_large <- ggplot(df_summary_large, aes(x = events, y = n.eff,
+                           color = tx,
+                           linetype = prevalence,
+                           group = interaction(tx, prevalence))) +
+  geom_line(linewidth = 1) +
+  geom_hline(yintercept = 10000, linetype = "dotted", color = "grey50") +
+  geom_hline(yintercept = 5000,  linetype = "dotted", color = "grey50")
+  scale_color_manual(values = colors, name = "Group") +
+  scale_linetype_manual(values = linetypes, name = "Baseline event rate") +
+  labs(x = "Number of events", y = "Effective sample size") +
+    scale_x_continuous(limits = c(0, 10)) +
+  scale_y_continuous(limits = c(0, 16000)) +
+  theme_minimal()
+
+p_event_prop_large <- ggplot(df_summary_large, aes(x = events_rate, y = n.eff,
+                         color = tx,
+                         linetype = prevalence,
+                         group = interaction(tx, prevalence))) +
+  geom_line(linewidth = 1) +
+  geom_hline(yintercept = 10000, linetype = "dotted", color = "grey50") +
+  geom_hline(yintercept = 5000,  linetype = "dotted", color = "grey50")
+  scale_color_manual(values = colors, name = "Group") +
+  scale_linetype_manual(values = linetypes, name = "Baseline event rate") +
+  labs(x = "Proportion of final events", y = "Effective sample size") +
+  scale_x_continuous(limits = c(0, 10)) +
+  scale_y_continuous(limits = c(0, 16000)) +
+  theme_minimal()
+
+# Combine the plots using patchwork and add a single legend on the right
+combined_plot <- ( ( p_time | p_event | p_event_prop ) / ( p_time_large | p_event_large | p_event_prop_large) ) +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "right")
+
+
+
+# Print the combined plot
+print(combined_plot)
+```
+
+
+<!-- events_50 <- simsurv( dist="weibull",  -->
+<!--                    gammas=shape,  -->
+<!--                    lambdas=scale[1],  -->
+<!--                    x=data.frame(tx = c(rep(0, n/2), rep(1, n/2))), -->
+<!--                    betas = c("tx" = log(hr)), -->
+<!--                    maxt=maxtime) -->
+<!-- events_25 <- simsurv( dist="weibull",  -->
+<!--                    gammas=shape,  -->
+<!--                    lambdas=scale[2],  -->
+<!--                    x=data.frame(tx = c(rep(0, n/2), rep(1, n/2))), -->
+<!--                    betas = c("tx" = log(hr)), -->
+<!--                    maxt=maxtime) -->
+<!-- events_10 <- simsurv( dist="weibull",  -->
+<!--                    gammas=shape,  -->
+<!--                    lambdas=scale[3],  -->
+<!--                    x=data.frame(tx = c(rep(0, n/2), rep(1, n/2))), -->
+<!--                    betas = c("tx" = log(hr)), -->
+<!--                    maxt=maxtime) -->
+<!-- events_5 <- simsurv( dist="weibull",  -->
+<!--                    gammas=shape,  -->
+<!--                    lambdas=scale[4],  -->
+<!--                    x=data.frame(tx = c(rep(0, n/2), rep(1, n/2))), -->
+<!--                    betas = c("tx" = log(hr)), -->
+<!--                    maxt=maxtime) -->
+<!-- events_50$tx = c(rep(0, n/2), rep(1, n/2)) -->
+<!-- events_25$tx = c(rep(0, n/2), rep(1, n/2)) -->
+<!-- events_10$tx = c(rep(0, n/2), rep(1, n/2)) -->
+<!-- events_5$tx = c(rep(0, n/2), rep(1, n/2)) -->
+
+<!-- cox_50 <- coxph(Surv(eventtime, status) ~ tx, data = events_50) -->
+<!-- cox_25 <- coxph(Surv(eventtime, status) ~ tx, data = events_25) -->
+<!-- cox_10 <- coxph(Surv(eventtime, status) ~ tx, data = events_10) -->
+<!-- cox_5 <- coxph(Surv(eventtime, status) ~ tx, data = events_5) -->
+
+<!-- cox_50_n0 <- survfit_n(survfit(cox_50, newdata = data.frame(tx = 0)), cox_50, coef=T, chaz=T) -->
+<!-- cox_25_n0 <- survfit_n(survfit(cox_25, newdata = data.frame(tx = 0)), cox_25, coef=T, chaz=T) -->
+<!-- cox_10_n0 <- survfit_n(survfit(cox_10, newdata = data.frame(tx = 0)), cox_10, coef=T, chaz=T) -->
+<!-- cox_5_n0 <- survfit_n(survfit(cox_5, newdata = data.frame(tx = 0)), cox_5, coef=T, chaz=T) -->
+
+<!-- cox_50_n1 <- survfit_n(survfit(cox_50, newdata = data.frame(tx = 1)), cox_50, coef=T, chaz=T) -->
+<!-- cox_25_n1 <- survfit_n(survfit(cox_25, newdata = data.frame(tx = 1)), cox_25, coef=T, chaz=T) -->
+<!-- cox_10_n1 <- survfit_n(survfit(cox_10, newdata = data.frame(tx = 1)), cox_10, coef=T, chaz=T) -->
+<!-- cox_5_n1 <- survfit_n(survfit(cox_5, newdata = data.frame(tx = 1)), cox_5, coef=T, chaz=T) -->
+
+<!-- cox_50_robust <- coxph(Surv(eventtime, status) ~ tx, data = events_50, robust = TRUE) -->
+<!-- cox_25_robust <- coxph(Surv(eventtime, status) ~ tx, data = events_25, robust = TRUE) -->
+<!-- cox_10_robust <- coxph(Surv(eventtime, status) ~ tx, data = events_10, robust = TRUE) -->
+<!-- cox_5_robust <- coxph(Surv(eventtime, status) ~ tx, data = events_5, robust = TRUE) -->
+
+<!-- cox_50_robust_n0 <- survfit_n(survfit(cox_50_robust, newdata = data.frame(tx = 0)), cox_50_robust, coef=T, chaz=T) -->
+<!-- cox_25_robust_n0 <- survfit_n(survfit(cox_25_robust, newdata = data.frame(tx = 0)), cox_25_robust, coef=T, chaz=T) -->
+<!-- cox_10_robust_n0 <- survfit_n(survfit(cox_10_robust, newdata = data.frame(tx = 0)), cox_10_robust, coef=T, chaz=T) -->
+<!-- cox_5_robust_n0 <- survfit_n(survfit(cox_5_robust, newdata = data.frame(tx = 0)), cox_5_robust, coef=T, chaz=T) -->
+
+<!-- cox_50_robust_n1 <- survfit_n(survfit(cox_50_robust, newdata = data.frame(tx = 1)), cox_50_robust, coef=T, chaz=T) -->
+<!-- cox_25_robust_n1 <- survfit_n(survfit(cox_25_robust, newdata = data.frame(tx = 1)), cox_25_robust, coef=T, chaz=T) -->
+<!-- cox_10_robust_n1 <- survfit_n(survfit(cox_10_robust, newdata = data.frame(tx = 1)), cox_10_robust, coef=T, chaz=T) -->
+<!-- cox_5_robust_n1 <- survfit_n(survfit(cox_5_robust, newdata = data.frame(tx = 1)), cox_5_robust, coef=T, chaz=T) -->
+
+<!-- df <- bind_rows( -->
+<!--   extract_sf(cox_50_n0, 0, "50%"), -->
+<!--   extract_sf(cox_50_n1, 1, "50%"), -->
+<!--   extract_sf(cox_25_n0, 0, "75%"), -->
+<!--   extract_sf(cox_25_n1, 1, "75%"), -->
+<!--   extract_sf(cox_10_n0, 0, "90%"), -->
+<!--   extract_sf(cox_10_n1, 1, "90%"), -->
+<!--   extract_sf(cox_5_n0, 0, "95%"), -->
+<!--   extract_sf(cox_5_n1, 1, "95%") -->
+<!-- ) -->
 
 
 ## References {.unnumbered}
