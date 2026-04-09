@@ -1309,77 +1309,16 @@ Hence, effective sample size can be misleading for short follow-up times. Effect
 source("code/compile.R")
 require(surveillance)
 
-extract_sf <- function(sf_obj, tx, prevalence){
-  df <- sf_to_df(sf_obj, time_grid)
-  df$tx <- factor(tx)
-  df$prevalence <- prevalence
-  df
-}
-
-run_one <- function(rep_id, scale, shape, maxtime, hr, n, time_grid,
-                    model_type = c("standard", "robust")){
-
-  model_type <- match.arg(model_type)
-  
-  out_list <- list()
-
-  for(i in seq_along(scale)){
-    
-    prev_label <- c("50%", "25%", "10%", "5%")[i]
-    
-    # simulate
-    dat <- simsurv(
-      dist = "weibull",
-      gammas = shape,
-      lambdas = scale[i],
-      x = data.frame(tx = c(rep(0, n/2), rep(1, n/2))),
-      betas = c("tx" = log(hr)),
-      maxt = maxtime
-    )
-    
-    dat$tx <- c(rep(0, n/2), rep(1, n/2))
-    
-    # choose model
-    if(model_type == "standard"){
-      fit <- coxph(Surv(eventtime, status) ~ tx, data = dat)
-      model_label <- "Standard"
-    } else {
-      fit <- coxph(Surv(eventtime, status) ~ tx, data = dat, robust = TRUE)
-      model_label <- "Robust"
-    }
-    
-    # survfit_n
-    sf_n0 <- survfit_n(survfit(fit, newdata = data.frame(tx = 0)), fit, coef=TRUE, chaz=TRUE)
-    sf_n1 <- survfit_n(survfit(fit, newdata = data.frame(tx = 1)), fit, coef=TRUE, chaz=TRUE)
-    
-    df_i <- bind_rows(
-      extract_sf(sf_n0, 0, prev_label),
-      extract_sf(sf_n1, 1, prev_label)
-    )
-    
-    df_i$model <- model_label
-    
-    out_list[[i]] <- df_i
-  }
-  
-  df_rep <- bind_rows(out_list)
-  df_rep$replicate <- rep_id
-  
-  return(df_rep)
-}
-    
-
-
 # Seed for consistency
 set.seed(1923)
 
-scale = c(0.219, 0.0910, 0.0333, 0.0162)
 shape = c(0.5) # shape 1 means exponential
+scale = c(lambda(0.25, shape), lambda(0.5, shape), lambda(0.75, shape), lambda(0.9, shape), lambda(0.95, shape)) # scale
 maxtime = 10 # maxtime
 hr = 2 # hazard ratio
 n = 1000 # number per group
 time_grid <- seq(0, 10, by = 0.001)
-n_sim <- 10  # choose number of repeats
+n_sim <- 100  # choose number of repeats
 
 df_standard <- bind_rows(
   lapply(1:n_sim, function(r)
@@ -1387,7 +1326,7 @@ df_standard <- bind_rows(
   )
 )
 
-df_standard$prevalence <- factor(df_standard$prevalence, levels = c("50%", "25%", "10%", "5%"))
+df_standard$prevalence <- factor(df_standard$prevalence, levels = c("75%", "50%", "25%", "10%", "5%"))
 df_standard <- df_standard %>%
   group_by(tx, prevalence) %>%
   mutate(events = max(n.risk) - n.risk)
@@ -1412,6 +1351,7 @@ df_summary_std <- df_standard %>%
 colors <- c("0" = "#37293F", "1" = "#9f84af")
 
 linetypes <- c(
+  "75%" = "twodash",
   "50%" = "solid",
   "25%" = "dashed",
   "10%" = "dotted",
@@ -1422,9 +1362,9 @@ p_time <- ggplot(df_summary_std, aes(x = time, y = n.eff,
                          color = tx,
                          linetype = prevalence,
                          group = interaction(tx, prevalence))) +
-  geom_line(linewidth = 1) +
   geom_hline(yintercept = 1000, linetype = "dotted", color = "grey50") +
   geom_hline(yintercept = 500,  linetype = "dotted", color = "grey50") +
+  geom_line(linewidth = 1) +
   scale_color_manual(values = colors, name = "Group") +
   scale_linetype_manual(values = linetypes, name = "Baseline event rate") +
   labs(x = "Time", y = "Effective sample size") +
@@ -1440,11 +1380,15 @@ p_event <- ggplot(df_summary_std, aes(x = events, y = n.eff,
   geom_hline(yintercept = 1000, linetype = "dotted", color = "grey50") +
   geom_hline(yintercept = 500,  linetype = "dotted", color = "grey50") +
   scale_color_manual(values = colors, name = "Group") +
-  scale_linetype_manual(values = linetypes, name = "Baseline survival") +
-  labs(x = "Number of events", y = "Effective sample size") +
+  scale_linetype_manual(values = linetypes, name = "Baseline event rate") +
+  labs(x = "Number of events") +
   scale_x_continuous(limits = c(0, 1000)) +
   scale_y_continuous(limits = c(0, 1600)) +
-  theme_minimal()
+  theme_minimal() +
+  theme( axis.text.y = element_blank(), 
+         axis.ticks.y = element_blank(),
+         axis.title.y = element_blank())
+
 
 p_event_prop <- ggplot(df_summary_std, aes(x = events_rate, y = n.eff,
                            color = tx,
@@ -1454,21 +1398,24 @@ p_event_prop <- ggplot(df_summary_std, aes(x = events_rate, y = n.eff,
   geom_hline(yintercept = 1000, linetype = "dotted", color = "grey50") +
   geom_hline(yintercept = 500,  linetype = "dotted", color = "grey50") +
   scale_color_manual(values = colors, name = "Group") +
-  scale_linetype_manual(values = linetypes, name = "Baseline survival") +
-  labs(x = "Proportion of total events", y = "Effective sample size") +
+  scale_linetype_manual(values = linetypes, name = "Baseline event rate") +
+  labs(x = "Proportion of total events") +
   scale_x_continuous(limits = c(0, 1)) +
   scale_y_continuous(limits = c(0, 1600)) +
-  theme_minimal()
+  theme_minimal() +
+  theme( axis.text.y = element_blank(), 
+         axis.ticks.y = element_blank(),
+         axis.title.y = element_blank()) 
 
 
 
 df_large <- bind_rows(
-  lapply(1:n_sim, function(r)
+  lapply(1:100, function(r)
     run_one(r, scale, shape, maxtime, hr, 10000, time_grid, model_type = "standard")
   )
 )
 
-df_large$prevalence <- factor(df_large$prevalence, levels = c("50%", "25%", "10%", "5%"))
+df_large$prevalence <- factor(df_large$prevalence, levels = c("75%", "50%", "25%", "10%", "5%"))
 df_large <- df_large %>%
   group_by(tx, prevalence) %>%
   mutate(events = max(n.risk) - n.risk)
@@ -1479,7 +1426,12 @@ df_summary_large <- df_large %>%
     surv = mean(surv),
     events = mean(events),
     .groups = "drop"
-  )
+  )  %>%
+  ungroup() %>%
+  group_by(tx, prevalence) %>%
+  mutate(events_rate = events / max(events),
+         surv_prop = (1-surv)/max(1-surv)) %>%
+  ungroup()
 
 
 p_time_large <- ggplot(df_summary_large, aes(x = time, y = n.eff,
@@ -1488,7 +1440,7 @@ p_time_large <- ggplot(df_summary_large, aes(x = time, y = n.eff,
                          group = interaction(tx, prevalence))) +
   geom_line(linewidth = 1) +
   geom_hline(yintercept = 10000, linetype = "dotted", color = "grey50") +
-  geom_hline(yintercept = 5000,  linetype = "dotted", color = "grey50")
+  geom_hline(yintercept = 5000,  linetype = "dotted", color = "grey50") +
   scale_color_manual(values = colors, name = "Group") +
   scale_linetype_manual(values = linetypes, name = "Baseline event rate") +
   labs(x = "Time", y = "Effective sample size") +
@@ -1502,13 +1454,17 @@ p_event_large <- ggplot(df_summary_large, aes(x = events, y = n.eff,
                            group = interaction(tx, prevalence))) +
   geom_line(linewidth = 1) +
   geom_hline(yintercept = 10000, linetype = "dotted", color = "grey50") +
-  geom_hline(yintercept = 5000,  linetype = "dotted", color = "grey50")
+  geom_hline(yintercept = 5000,  linetype = "dotted", color = "grey50") +
   scale_color_manual(values = colors, name = "Group") +
   scale_linetype_manual(values = linetypes, name = "Baseline event rate") +
-  labs(x = "Number of events", y = "Effective sample size") +
-    scale_x_continuous(limits = c(0, 10)) +
+  labs(x = "Number of events") +
+    scale_x_continuous(limits = c(0, 10000)) +
   scale_y_continuous(limits = c(0, 16000)) +
-  theme_minimal()
+  theme_minimal() +
+  theme( axis.text.y = element_blank(), 
+         axis.ticks.y = element_blank(),
+         axis.title.y = element_blank())
+
 
 p_event_prop_large <- ggplot(df_summary_large, aes(x = events_rate, y = n.eff,
                          color = tx,
@@ -1516,23 +1472,244 @@ p_event_prop_large <- ggplot(df_summary_large, aes(x = events_rate, y = n.eff,
                          group = interaction(tx, prevalence))) +
   geom_line(linewidth = 1) +
   geom_hline(yintercept = 10000, linetype = "dotted", color = "grey50") +
-  geom_hline(yintercept = 5000,  linetype = "dotted", color = "grey50")
+  geom_hline(yintercept = 5000,  linetype = "dotted", color = "grey50") +
   scale_color_manual(values = colors, name = "Group") +
   scale_linetype_manual(values = linetypes, name = "Baseline event rate") +
-  labs(x = "Proportion of final events", y = "Effective sample size") +
-  scale_x_continuous(limits = c(0, 10)) +
+  labs(x = "Proportion of final events") +
+  scale_x_continuous(limits = c(0, 1)) +
+  scale_y_continuous(limits = c(0, 16000)) +
+  theme_minimal() +
+  theme( axis.text.y = element_blank(), 
+         axis.ticks.y = element_blank(),
+         axis.title.y = element_blank())
+
+p_surv_large <- ggplot(df_summary_large, aes(x = 1-surv, y = n.eff,
+                         color = tx,
+                         linetype = prevalence,
+                         group = interaction(tx, prevalence))) +
+  geom_line(linewidth = 1) +
+  scale_color_manual(values = colors, name = "Group") +
+  scale_linetype_manual(values = linetypes, name = "Baseline event rate") +
+  labs(x = "Event incidence", y = "Effective sample size") +
+    scale_x_continuous(limits = c(0, 1)) +
   scale_y_continuous(limits = c(0, 16000)) +
   theme_minimal()
 
+
 # Combine the plots using patchwork and add a single legend on the right
-combined_plot <- ( ( p_time | p_event | p_event_prop ) / ( p_time_large | p_event_large | p_event_prop_large) ) +
-  plot_layout(guides = "collect") &
+combined_plot <- ( ( p_time | p_event | p_event_prop )  ) +
+  plot_layout(guides = "collect") +
+  plot_annotation(
+    title = "Effective sample size for different event rates",
+    theme = theme(plot.title = element_text(size = 14, face = "bold", hjust = 0))
+  ) +
   theme(legend.position = "right")
 
-
+# Combine the plots using patchwork and add a single legend on the right
+combined_plot_large <- ( ( p_time_large | p_event_large | p_event_prop_large )  ) +
+  plot_layout(guides = "collect") +
+  plot_annotation(
+    title = "Effective sample size for different event rates with larger development sample size (N=10,000)",
+    theme = theme(plot.title = element_text(size = 14, face = "bold", hjust = 0))
+  ) +
+  theme(legend.position = "right")
 
 # Print the combined plot
 print(combined_plot)
+print(combined_plot_large)
+```
+
+```{r} 
+# Seed for consistency
+set.seed(1923)
+
+shape = c(0.5) # shape 1 means exponential
+scale = c(lambda(0.25, shape), lambda(0.5, shape), lambda(0.75, shape), lambda(0.9, shape), lambda(0.95, shape)) # scale
+maxtime = 10 # maxtime
+hr = 2 # hazard ratio
+n = 1000 # number per group
+time_grid <- seq(0, 10, by = 0.001)
+n_sim <- 100  # choose number of repeats
+
+df_robust <- bind_rows(
+  lapply(1:n_sim, function(r)
+    run_one(r, scale, shape, maxtime, hr, n, time_grid, model_type = "robust")
+  )
+)
+
+df_robust$prevalence <- factor(df_robust$prevalence, levels = c("75%", "50%", "25%", "10%", "5%"))
+df_robust <- df_robust %>%
+  group_by(tx, prevalence) %>%
+  mutate(events = max(n.risk) - n.risk)
+df_summary_rob <- df_robust %>%
+  group_by(time, tx, prevalence) %>%
+  summarise(
+    n.eff = mean(n.eff),
+    surv = mean(surv),
+    events = mean(events),
+    .groups = "drop"
+  )  %>%
+  ungroup() %>%
+  group_by(tx, prevalence) %>%
+  mutate(events_rate = events / max(events),
+         surv_prop = (1-surv)/max(1-surv)) %>%
+  ungroup()
+
+colors <- c("0" = "#37293F", "1" = "#9f84af")
+
+linetypes <- c(
+  "75%" = "twodash",
+  "50%" = "solid",
+  "25%" = "dashed",
+  "10%" = "dotted",
+  "5%" = "dotdash"
+)
+
+p_time <- ggplot(df_summary_rob, aes(x = time, y = n.eff,
+                         color = tx,
+                         linetype = prevalence,
+                         group = interaction(tx, prevalence))) +
+  geom_hline(yintercept = 1000, linetype = "dotted", color = "grey50") +
+  geom_hline(yintercept = 500,  linetype = "dotted", color = "grey50") +
+  geom_line(linewidth = 1) +
+  scale_color_manual(values = colors, name = "Group") +
+  scale_linetype_manual(values = linetypes, name = "Baseline event rate") +
+  labs(x = "Time", y = "Effective sample size") +
+  scale_x_continuous(limits = c(0, 10)) +
+  scale_y_continuous(limits = c(0, 1600)) +
+  theme_minimal()
+
+p_event <- ggplot(df_summary_rob, aes(x = events, y = n.eff,
+                           color = tx,
+                           linetype = prevalence,
+                           group = interaction(tx, prevalence))) +
+  geom_line(linewidth = 1) +
+  geom_hline(yintercept = 1000, linetype = "dotted", color = "grey50") +
+  geom_hline(yintercept = 500,  linetype = "dotted", color = "grey50") +
+  scale_color_manual(values = colors, name = "Group") +
+  scale_linetype_manual(values = linetypes, name = "Baseline event rate") +
+  labs(x = "Number of events") +
+  scale_x_continuous(limits = c(0, 1000)) +
+  scale_y_continuous(limits = c(0, 1600)) +
+  theme_minimal() +
+  theme( axis.text.y = element_blank(), 
+         axis.ticks.y = element_blank(),
+         axis.title.y = element_blank())
+
+
+p_event_prop <- ggplot(df_summary_rob, aes(x = events_rate, y = n.eff,
+                           color = tx,
+                           linetype = prevalence,
+                           group = interaction(tx, prevalence))) +
+  geom_line(linewidth = 1) +
+  geom_hline(yintercept = 1000, linetype = "dotted", color = "grey50") +
+  geom_hline(yintercept = 500,  linetype = "dotted", color = "grey50") +
+  scale_color_manual(values = colors, name = "Group") +
+  scale_linetype_manual(values = linetypes, name = "Baseline event rate") +
+  labs(x = "Proportion of total events") +
+  scale_x_continuous(limits = c(0, 1)) +
+  scale_y_continuous(limits = c(0, 1600)) +
+  theme_minimal() +
+  theme( axis.text.y = element_blank(), 
+         axis.ticks.y = element_blank(),
+         axis.title.y = element_blank()) 
+
+# Combine the plots using patchwork and add a single legend on the right
+combined_plot <- ( ( p_time | p_event | p_event_prop )  ) +
+  plot_layout(guides = "collect") +
+  plot_annotation(
+    title = "Effective sample size for different event rates",
+    theme = theme(plot.title = element_text(size = 14, face = "bold", hjust = 0))
+  ) +
+  theme(legend.position = "right")
+
+# Print the combined plot
+print(combined_plot)
+```
+
+```{r}
+# Seed for consistency
+set.seed(1923)
+
+shape = c(0.5) # shape 1 means exponential
+# make a vector of all lambda's from 0.01 to 0.99 in the scale parameter, so do lambda(x, shape) for all x in that range
+scale =  sapply(seq(0.01, 0.99, by = 0.01), function(x) lambda(x, shape)) # scale
+maxtime = 10 # maxtime
+hr = 2 # hazard ratio
+n = 1000 # number per group
+time_grid <- seq(0, 10, by = 0.001)
+n_sim <- 10  # choose number of repeats
+
+df <- bind_rows(
+  lapply(1:n_sim, function(r)
+    run_one(r, scale, shape, maxtime, hr, n, time_grid, model_type = "standard")
+  )
+)
+
+# Levels need to be from 1% to 99% in the prevalence variable as character
+#df$prevalence <- factor(df$prevalence, levels = seq(0.01, 0.99, 0.01) )
+df <- df %>%
+  group_by(tx, prevalence) %>%
+  mutate(events = max(n.risk) - n.risk)
+df_summary <- df %>%
+  group_by(time, tx, prevalence) %>%
+  summarise(
+    n.eff = mean(n.eff),
+    surv = mean(surv),
+    events = mean(events),
+    .groups = "drop"
+  )  %>%
+  ungroup() %>%
+  group_by(tx, prevalence) %>%
+  mutate(events_rate = events / max(events),
+         surv_prop = (1-surv)/max(1-surv)) %>%
+  ungroup()
+
+max_points <- df_summary %>%
+  group_by(tx, prevalence) %>%
+  slice_max(order_by = 1-surv, n = 1) %>%
+  ungroup()
+
+p_surv <- ggplot(df_summary[df_summary$tx == 0,], aes(x = 1-surv, y = n.eff,
+                         color = prevalence,
+                         group = interaction(tx, prevalence))) +
+  geom_line(linewidth = 0.7, alpha = 0.3) +
+  geom_line(data = max_points,
+            aes(x = 1-surv, y = n.eff, group = 1),
+            color = "#37293F", linewidth = 1.2, linetype = "solid") +
+  scale_color_gradient(low="#2E7691", high = "#C2666B") +
+  scale_linetype_manual(values = linetypes, name = "Baseline event rate") +
+  labs(x = "Event incidence", y = "Effective sample size") +
+    scale_x_continuous(limits = c(0, 1)) +
+  scale_y_continuous(limits = c(0, 1600)) +
+  theme_minimal()
+
+library(ggnewscale) # For multiple color scales
+
+p_surv <- ggplot(df_summary, aes(x = 1-surv, y = n.eff)) +
+  # For tx == 0
+  geom_line(data = subset(df_summary, tx == 0),
+            aes(color = prevalence, group = interaction(tx, prevalence)),
+            linewidth = 0.5, alpha = 0.2) +
+  scale_color_gradient(low = "#a8d3e3", high = "#153744", name = "Prevalence (tx=0)") +
+  # For tx == 1
+  new_scale_color() +
+  geom_line(data = subset(df_summary, tx == 1),
+            aes(color = prevalence, group = interaction(tx, prevalence)),
+            linewidth = 1, alpha = 0.3) +
+  scale_color_gradient(low = "#dfafb2", high = "#8b373c", name = "Prevalence (tx=1)") +
+  # Add solid line for max points (new color scale)
+  new_scale_color() +
+  geom_line(data = max_points,
+            aes(x = 1-surv, y = n.eff, group = tx, color = factor(tx)),
+            linewidth = 1, linetype = "solid") +
+  scale_color_manual(values = c("0" = "#2E7691", "1" = "#C2666B"),
+                     name = "Treatment") +
+  labs(x = "Event incidence", y = "Effective sample size") +
+  scale_x_continuous(limits = c(0, 1)) +
+  scale_y_continuous(limits = c(0, 1600)) +
+  theme_minimal()
+
 ```
 
 
