@@ -1529,7 +1529,7 @@ maxtime = 10 # maxtime
 hr = 2 # hazard ratio
 n = 1000 # number per group
 time_grid <- seq(0, 10, by = 0.001)
-n_sim <- 100  # choose number of repeats
+n_sim <- 10  # choose number of repeats
 
 df_robust <- bind_rows(
   lapply(1:n_sim, function(r)
