@@ -18,7 +18,8 @@ pkgs <- c(
   "grid",
   "knitr",
   "surveillance",
-  "here"
+  "here",
+  "ggnewscale"
 )
 
 options(repos = list(CRAN="http://cran.rstudio.com/"))

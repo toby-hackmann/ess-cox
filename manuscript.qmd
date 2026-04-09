@@ -1537,7 +1537,9 @@ df_robust <- bind_rows(
   )
 )
 
-df_robust$prevalence <- factor(df_robust$prevalence, levels = c("75%", "50%", "25%", "10%", "5%"))
+df_robust$prevalence <- factor(df_robust$prevalence,
+                               levels = c(0.25, 0.5, 0.75, 0.9, 0.95), 
+                               labels = c("75%", "50%", "25%", "10%", "5%"))
 df_robust <- df_robust %>%
   group_by(tx, prevalence) %>%
   mutate(events = max(n.risk) - n.risk)
