@@ -1631,6 +1631,7 @@ print(combined_plot)
 
 ```{r}
 # Seed for consistency
+source("code/compile.R")
 set.seed(1923)
 
 shape = c(0.5) # shape 1 means exponential
@@ -1640,7 +1641,7 @@ maxtime = 10 # maxtime
 hr = 2 # hazard ratio
 n = 1000 # number per group
 time_grid <- seq(0, 10, by = 0.001)
-n_sim <- 10  # choose number of repeats
+n_sim <- 100  # choose number of repeats
 
 df <- bind_rows(
   lapply(1:n_sim, function(r)
@@ -1672,20 +1673,6 @@ max_points <- df_summary %>%
   slice_max(order_by = 1-surv, n = 1) %>%
   ungroup()
 
-p_surv <- ggplot(df_summary[df_summary$tx == 0,], aes(x = 1-surv, y = n.eff,
-                         color = prevalence,
-                         group = interaction(tx, prevalence))) +
-  geom_line(linewidth = 0.7, alpha = 0.3) +
-  geom_line(data = max_points,
-            aes(x = 1-surv, y = n.eff, group = 1),
-            color = "#37293F", linewidth = 1.2, linetype = "solid") +
-  scale_color_gradient(low="#2E7691", high = "#C2666B") +
-  scale_linetype_manual(values = linetypes, name = "Baseline event rate") +
-  labs(x = "Event incidence", y = "Effective sample size") +
-    scale_x_continuous(limits = c(0, 1)) +
-  scale_y_continuous(limits = c(0, 1600)) +
-  theme_minimal()
-
 library(ggnewscale) # For multiple color scales
 
 p_surv <- ggplot(df_summary, aes(x = 1-surv, y = n.eff)) +
@@ -1711,6 +1698,71 @@ p_surv <- ggplot(df_summary, aes(x = 1-surv, y = n.eff)) +
   scale_x_continuous(limits = c(0, 1)) +
   scale_y_continuous(limits = c(0, 1600)) +
   theme_minimal()
+```
+
+
+```{r}
+
+# 1. Define the Population (n=1000)
+set.seed(123) # For reproducibility
+n_total <- 1000
+time_grid <- seq(0, 10, by = 0.01)
+
+shape <- 1
+# Assuming lambda() is your custom function for Weibull scale
+#scale_vec <- c(lambda(0.25, shape), lambda(0.5, shape), 
+#               lambda(0.75, shape), lambda(0.9, shape), lambda(0.95, shape))
+scale_vec <- c(lambda(0.5, shape))
+
+maxtime <- 10
+n_sim <- 10
+
+
+X <- data.frame(
+  # Binary Treatment
+  tx = rbinom(n_total, 1, 0.5),
+  
+  # Continuous Age (Standardized/Centered)
+  age = rnorm(n_total, mean = 0, sd = 10),
+  
+  # Categorical Risk (Converted to numeric for simsurv)
+  # 0 = Low, 1 = Med, 2 = High
+  risk = sample(c(0, 1, 2), n_total, replace = TRUE, prob = c(0.5, 0.3, 0.2)),
+  
+  # Continuous Biomarker
+  marker = runif(n_total, 0, 1)
+)
+
+# 2. Define Unique Hazard Ratios for each
+# Note: HR > 1 increases hazard (shortens life), HR < 1 decreases hazard
+HR <- c(
+  tx = 0.70,      # Treatment reduces hazard by 30%
+  age = 1.05,     # Each year of age increases hazard by 5%
+  risk = 1.40,    # Moving up a risk category increases hazard by 40%
+  marker = 1.60   # High biomarker values double the hazard
+)
+
+# Using the optimized function we built
+df <- bind_rows(
+  lapply(1:n_sim, function(r) {
+    run_one_generalized(
+      rep_id = r, 
+      scale = scale_vec, 
+      shape = shape, 
+      maxtime = maxtime, 
+      hr_vector = HR, 
+      covariates = X, 
+      time_grid = time_grid, 
+      model_type = "standard"
+    )
+  })
+)
+
+# 1. Prepare data (automatically identifies all other columns as covariates)
+my_summary <- prepare_simulation_summary(df)
+
+# 2. Plot using custom variable name
+plot_survival_simplified(my_summary, time_scale = "log")
 
 ```
 
