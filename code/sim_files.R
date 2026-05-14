@@ -1,3 +1,152 @@
+library(survival)
+library(ggplot2)
+library(patchwork)
+library(dplyr)
+
+sim_coverage <- function( N = 1000, 
+                          reps = 1000, 
+                          HR = 2, 
+                          t_grid=c(seq(0.00001, 0.1, by = 0.00001), seq(0.1, 1, by = 0.001)), 
+                          newpatient = data.frame(X1 = 0, X2 = 0) ){
+  # Parameters
+  set.seed(123)
+  beta <- log(HR)
+  true_S_pt1 <- exp(-exp(beta * newpatient$X1 + beta * newpatient$X2) * t_grid)
+  
+  # Storage
+  coverage_matrix <- matrix(NA, nrow = reps, ncol = length(t_grid))
+  neff_matrix     <- matrix(NA, nrow = reps, ncol = length(t_grid))
+  
+  for (m in 1:reps) {
+    # Data Gen
+    X1 <- rbinom(N, 1, 0.5)
+    X2 <- rnorm(N, 0, 1)
+    hazards <- exp(beta * X1 + beta * X2)
+    TT <- rexp(N, rate = hazards)
+    df <- data.frame(TT = TT, status = 1, X1 = X1, X2 = X2)
+    
+    # Fit & Predict
+    fit <- coxph(Surv(TT, status) ~ X1 + X2, data = df)
+    s_obj <- summary(survfit(fit, newdata = newpatient, conf.type = "log-log"), times = t_grid)
+    
+    # Coverage
+    coverage_matrix[m, ] <- (true_S_pt1 <= s_obj$upper) & (true_S_pt1 >= s_obj$lower)
+    
+    # n.eff Calculation + NaN fix
+    n_eff <- (1 - s_obj$surv) / (s_obj$surv * (s_obj$std.err^2))
+    
+    # Handling NaNs/Infs (Standard error is 0 before first event)
+    first_valid <- which(!is.na(n_eff) & !is.infinite(n_eff))[1]
+    if (!is.na(first_valid) && first_valid > 1) {
+      n_eff[1:(first_valid - 1)] <- n_eff[first_valid]
+    }
+    neff_matrix[m, ] <- n_eff
+  }
+  
+  # Prepare Data for ggplot
+  plot_df <- data.frame(
+    time = t_grid,
+    coverage = colMeans(coverage_matrix, na.rm = TRUE),
+    n_eff_mean = colMeans(neff_matrix, na.rm = TRUE),
+    true = true_S_pt1
+  )
+  
+  # --- GGPLOT CONSTRUCTION ---
+  
+  # Top Plot: Coverage
+  p1 <- ggplot(plot_df, aes(x = time, y = coverage)) +
+    geom_line(color = "steelblue", size = 1) +
+    geom_hline(yintercept = 0.95, linetype = "dashed", color = "red") +
+    scale_y_continuous(limits = c(0.85, 1.0)) +
+    labs(title = paste0("Simulation Results for patient (X1=",newpatient$X1, ", X2=", newpatient$X2, ")"), 
+         x = "Time",
+         y = "95% CI Coverage") +
+    theme_minimal()
+  
+  # Bottom Plot: Effective Sample Size
+  p2 <- ggplot(plot_df, aes(x = time, y = n_eff_mean)) +
+    geom_line(color = "darkgreen", size = 1) +
+    labs(x = "Time", y = "Mean Effective Sample Size (n.eff)") +
+    geom_hline(yintercept = 1000, linetype = "dashed", color = "red") +
+    scale_y_continuous(limits = c(0, 2500)) +
+    theme_minimal()
+  
+  p3 <- ggplot(plot_df, aes(x=time, y=true)) +
+    geom_line(color = "purple", size = 1) +
+    labs(x = "Time", y = "True Survival Probability") +
+    scale_y_continuous(limits = c(0, 1)) +
+    theme_minimal()
+  
+  # Concatenate top-bottom
+  final_plot <- p1 / p2 / p3
+  return(final_plot)
+}
+
+sim_se_comparison <- function(N = 1000, 
+                              reps = 1000, 
+                              HR = 2, 
+                              t_grid = c(seq(0.00001, 0.1, by = 0.00001), seq(0.1, 1, by = 0.001)), 
+                              newpatient = data.frame(X1 = 0, X2 = 0)) {
+  set.seed(123)
+  beta <- log(HR)
+  
+  # Storage for survival estimates and their model-reported SEs
+  surv_estimates <- matrix(NA, nrow = reps, ncol = length(t_grid))
+  model_se      <- matrix(NA, nrow = reps, ncol = length(t_grid))
+  
+  for (m in 1:reps) {
+    # Data Generation (Exponential Baseline Hazard = 1)
+    X1 <- rbinom(N, 1, 0.5)
+    X2 <- rnorm(N, 0, 1)
+    hazards <- exp(beta * X1 + beta * X2)
+    TT <- rexp(N, rate = hazards)
+    df <- data.frame(TT = TT, status = 1, X1 = X1, X2 = X2)
+    
+    # Fit Cox Model
+    fit <- coxph(Surv(TT, status) ~ X1 + X2, data = df)
+    
+    # Extract survival and SE at t_grid
+    # We use type="survival" to ensure we get the standard error of the estimate
+    s_obj <- summary(survfit(fit, newdata = newpatient), times = t_grid)
+    
+    surv_estimates[m, ] <- s_obj$surv
+    model_se[m, ]      <- s_obj$std.err
+  }
+  
+  # Calculate Comparison Metrics
+  # Empirical SE is the standard deviation of the point estimates across reps
+  emp_se <- apply(surv_estimates, 2, sd, na.rm = TRUE)
+  # Mean Model SE is the average of the SEs reported by the Cox model
+  mean_model_se <- sqrt(colMeans(model_se^2, na.rm = TRUE))
+  
+  plot_df <- data.frame(
+    time = t_grid,
+    Emp_SE = emp_se,
+    Model_SE = mean_model_se,
+    Ratio = mean_model_se / emp_se
+  )
+  
+  # Plot 1: Direct Comparison
+  p1 <- ggplot(plot_df, aes(x = time)) +
+    geom_line(aes(y = Emp_SE, color = "Empirical SE"), size = 1) +
+    geom_line(aes(y = Model_SE, color = "Mean Model SE"), linetype = "dashed", size = 1) +
+    scale_color_manual(values = c("Empirical SE" = "black", "Mean Model SE" = "red")) +
+    labs(title = "Model-Based vs. Empirical Standard Errors",
+         subtitle = paste0("Patient: X1=", newpatient$X1, ", X2=", newpatient$X2),
+         y = "Standard Error", color = "Type") +
+    theme_minimal()
+  
+  # Plot 2: Ratio (Should be close to 1.0)
+  p2 <- ggplot(plot_df, aes(x = time, y = Ratio)) +
+    geom_line() +
+    geom_hline(yintercept = 1, linetype = "dotted", color = "blue") +
+    scale_y_continuous(limits = c(0.8, 1.2)) +
+    labs(y = "Ratio (Model SE / MC SE)", x = "Time") +
+    theme_minimal()
+  
+  return(p1 / p2)
+}
+
 extract_sf <- function(sf_obj, tx, prevalence){
   df <- sf_to_df(sf_obj, time_grid)
   df$tx <- factor(tx)
