@@ -1139,57 +1139,10 @@ print(combined_plot_exp)
 print(weibull_n0[100])
 print(weibull_n1[100])
 
-#save(cox_n0, file = "output/cox_n0.RData")
-#save(cox_n1, file = "output/cox_n1.RData")
+
 save.image(file = "output/combined_exp.RData")
-#rm( list = ls())
 ```
 
-<!-- ### Confidence bands -->
-<!-- Voorstel van Liesbeth - leek niet te lukken (stond dat er geen goede software is in @sachs2022), maar riskRegression heeft wel een implementatie. Wel vreemd, effective N op basis van hun SE is heel anders dat die van `survival`. riskRegression zegt dat ze een von Mises expansion gebruiken voor de SE (in plaats van de delta-methode). Dit ook nog toevoegen lijkt me wel erg veel werk en niet een gigantisch verschil. Deze SE zorgt voor exact dezelfde effective N super vroeg, daarna ietsje lager en later weer gelijk. Ander apart iets - de effective N op basis van deze SE gaat heel vaak ook omhoog - ik denk wanneer iemand gecensureerd wordt ipv overlijd of andersom? Niet helemaal duidelijk nog, maar zelfs na een tijdje gebeurt dit nog. Er worden ook geen "SE" voor de confidence bands gerapporteerd, dus het beste dat je kan doen is de breedte delen door 2*1.96 en dat gebruiken als SE. Dit lijkt best goed te gaan bij de pointwise CI. -->
-
-<!-- ```{r} -->
-<!-- source("code/compile.R") -->
-<!-- library(riskRegression) -->
-<!-- cox <- coxph(Surv(time, status)~ age, data = colon_df, x = TRUE) -->
-<!-- pred <- predictCox(cox, time = sort(colon_df$time), newdata = data.frame(age = 70), band = TRUE, se = TRUE) -->
-<!-- plot <- ggplot() + -->
-<!--   geom_line(aes(x = pred$times, y = pred$survival[1,]), linewidth = 1.2) + -->
-<!--   geom_line(aes(x = pred$times, y = pred$survival.upper[1,]), linetype = "dashed") + -->
-<!--   geom_line(aes(x = pred$times, y = pred$survival.lower[1,]), linetype = "dashed") + -->
-<!--   geom_line(aes(x = pred$times, y = pred$survival.upperBand[1,]), linetype = "dotted") + -->
-<!--   geom_line(aes(x = pred$times, y = pred$survival.lowerBand[1,]), linetype = "dotted") + -->
-<!--   scale_x_continuous(name = "Time") + -->
-<!--   scale_y_continuous(name = "Survival Probability", limits = c(0, 1)) + -->
-<!--   ggtitle("Cox model prediction with pointwise confidence interval") + -->
-<!--   theme_minimal() -->
-<!-- plot -->
-
-<!-- n_band <- pred$survival[1,]*(1-pred$survival[1,])/( ((pred$survival.upperBand[1,] - pred$survival.lowerBand[1,])/(2*1.96))^2 ) -->
-<!-- n_int <- pred$survival[1,]*(1-pred$survival[1,])/( ((pred$survival.upper[1,] - pred$survival.lower[1,])/(2*1.96))^2 ) -->
-<!-- n_se <- pred$survival[1,]*(1-pred$survival[1,])/( (pred$survival.se[1,])^2 ) -->
-
-<!-- sf_n <-  survfit_n(survfit(cox, newdata = data.frame(age = 70)), cox = cox) -->
-
-<!-- plot2 <- ggplot() + -->
-<!--   geom_line(aes(x = pred$times, y = n_se, color = "1"), linewidth = 1.2) + -->
-<!--   geom_line(aes(x = pred$times, y = n_int, color = "2"), linewidth = 1.2) + -->
-<!--   geom_line(aes(x = pred$times, y = n_band, color = "3"), linewidth = 1.2) + -->
-<!--   geom_line(aes(x = sf_n$time, y = sf_n$n.eff, color = "4"), linewidth = 1.2) + -->
-<!--   geom_hline(yintercept = 929, linetype = "dotted", color = "black", linewidth = 0.6) + -->
-<!--   scale_x_continuous(name = "Time") + -->
-<!--   scale_y_continuous(name = "Effective Sample Size", limits = c(0, 1000)) + -->
-<!--   ggtitle("Effective Sample Size from riskRegression") + -->
-<!--   labs( color = "Legend") + -->
-<!--   scale_color_manual( -->
-<!--     values = c("1"="#37293F", "2"="#2E7691", "3"="#9f84af", "4"="#c6aa2c"), -->
-<!--     labels = c("Using standard error", "Using pointwise CI", "Using simultaneous CI", "Using survfit_n") -->
-<!--   ) + -->
-<!--   theme_minimal() + -->
-<!--   theme(legend.position = "right") +  -->
-<!--   guides(colour = guide_legend(override.aes = list(alpha = 1))) -->
-<!-- plot2 -->
-<!-- ``` -->
 
 ## Discussion
 This study shows that effective sample size behaves in a complicated way for the Cox proportional hazards model. We relate our findings to the criteria set in the introduction.
@@ -1312,8 +1265,8 @@ Hence, effective sample size can be misleading for short follow-up times. Effect
 #| message: FALSE
 #| include: FALSE
 #| warning: FALSE
-#| fig-width: 10
-#| fig-height: 6.2
+#| fig-width: 11
+#| fig-height: 9
 #| label: fig-6
 #| fig-cap: "Simulation of survival data and effective sample sizes of survival estimates with no censoring and one continuous predictor."
 
@@ -1331,10 +1284,12 @@ maxtime = 10 # maxtime
 hr = 2 # hazard ratio
 n = 1000 # number per group
 time_grid <- c(seq(0,1, by = 0.001), seq(1, 5, by = 0.01), seq(5, 10, by = 0.1)) # time grid for predictions
-n_sim <- 200  # choose number of repeats
+n_sim <- 100  # choose number of repeats
 
 # 1. Define the plan (e.g., use all available cores)
-plan(multisession)
+plan(sequential) # Shuts down existing workers
+gc()             # Force garbage collection
+plan(multisession, workers = 11) # Re-initialize (try fewer workers to save RAM)
 df_standard <- future_lapply(1:n_sim, function(r) {
   run_one(r, scale, shape, maxtime, hr, n, time_grid, model_type = "standard")
 }, future.seed = TRUE) %>% 
@@ -1436,9 +1391,19 @@ final <- p_time + p_event + p_event_prop + guide_area() +
   plot_layout(design = design, guides = "collect")
 
 print(final)
+ggsave("images/fig-long-run.svg", width = 13, height = 10, dpi = 300)
 ```
 
 ```{r}
+#| echo: FALSE
+#| output: FALSE
+#| eval: FALSE
+#| message: FALSE
+#| include: FALSE
+#| warning: FALSE
+#| fig-width: 10
+#| fig-height: 6.2
+#| label: fig-7
 # Seed for consistency
 source("code/compile.R")
 library(future.apply)
@@ -1446,7 +1411,7 @@ set.seed(1923)
 
 shape = c(0.5) # shape 1 means exponential
 # make a vector of all lambda's from 0.01 to 0.99 in the scale parameter, so do lambda(x, shape) for all x in that range
-scale =  sapply(c(seq(0.01, 0.5, by = 0.02), seq(0.5, 0.99, by = 0.01)), function(x) lambda(x, shape)) # scale
+scale =  sapply(c(seq(0.001, 0.10, by = 0.001), seq(0.10, 0.5, by = 0.01), seq(0.5, 1, 0.02)), function(x) lambda(x, shape)) # scale
 maxtime = 10 # maxtime
 hr = 2 # hazard ratio
 n = 1000 # number per group
@@ -1454,7 +1419,9 @@ time_grid <- seq(0, 10, by = 0.1)
 n_sim <- 100  # choose number of repeats
 
 # 1. Define the plan (e.g., use all available cores)
-plan(multisession)
+plan(sequential) # Shuts down existing workers
+gc()             # Force garbage collection
+plan(multisession, workers = 12) # Re-initialize (try fewer workers to save RAM)
 df <- future_lapply(1:n_sim, function(r) {
   run_one(r, scale, shape, maxtime, hr, n, time_grid, model_type = "standard")
 }, future.seed = TRUE) %>% 
@@ -1478,6 +1445,7 @@ df_summary <- df %>%
   mutate(events_rate = events / max(events),
          surv_prop = (1-surv)/max(1-surv)) %>%
   ungroup()
+df_summary$prevalence = 1-df_summary$prevalence
 
 max_points <- df_summary %>%
   group_by(tx, prevalence) %>%
@@ -1491,13 +1459,13 @@ p_surv <- ggplot(df_summary, aes(x = 1-surv, y = n.eff)) +
   geom_line(data = subset(df_summary, tx == 0),
             aes(color = prevalence, group = interaction(tx, prevalence)),
             linewidth = 0.5, alpha = 0.2) +
-  scale_color_gradient(low = "#a8d3e3", high = "#153744", name = "Prevalence (tx=0)") +
+  scale_color_gradient(high = "#a8d3e3", low = "#153744", name = "Prevalence (tx=0)") +
   # For tx == 1
   new_scale_color() +
   geom_line(data = subset(df_summary, tx == 1),
             aes(color = prevalence, group = interaction(tx, prevalence)),
-            linewidth = 1, alpha = 0.3) +
-  scale_color_gradient(low = "#dfafb2", high = "#8b373c", name = "Prevalence (tx=1)") +
+            linewidth = 1, alpha = 0.2) +
+  scale_color_gradient(high = "#dfafb2", low = "#8b373c", name = "Prevalence (tx=1)") +
   # Add solid line for max points (new color scale)
   new_scale_color() +
   geom_line(data = max_points,
@@ -1510,7 +1478,8 @@ p_surv <- ggplot(df_summary, aes(x = 1-surv, y = n.eff)) +
   scale_y_continuous(limits = c(0, 1600)) +
   theme_minimal()
 
-p_surv
+print(p_surv)
+ggsave("images/fig-increase.svg", width = 13, height = 10, dpi = 300)
 ```
 
 
